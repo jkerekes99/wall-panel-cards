@@ -107,7 +107,7 @@ class WpPage extends HTMLElement {
     const c = this._config;
     const root = this.shadowRoot;
     root.innerHTML = `<style>${WP_PALETTE}${WP_PAGE_CSS}</style>
-      <div class="page">
+      <div class="page ${c.fit_screen ? "fit" : ""}">
         <nav class="bar">
           <div class="tabs">${c.tabs.map((t) => `<button class="tab" data-path="${$esc(t.path)}">${icon(t.icon)}<span>${$esc(t.name)}</span></button>`).join("")}</div>
           ${c.chips?.length ? `<div class="chips" id="chips"></div>` : ""}
@@ -278,6 +278,7 @@ const WP_PAGE_CSS = `
   .lit { flex: 1; min-width: 0; } .lit b { display:block; font-size: 19px; } .lit small { display:block; color: var(--wp-muted); font-size: 15px; margin-top: 2px; }
   .empty { display:flex; flex-direction:column; align-items:center; gap: 10px; padding: 36px 10px; color: var(--wp-muted); font-size: 18px; } .empty ha-icon { --mdc-icon-size: 40px; opacity: .6; }
   .grid { flex:1; display:grid; gap: var(--wp-gap); min-height: 0; }
+  .page.fit { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; } .page.fit .grid > .cell:not(.popup) { min-height: 0; overflow: hidden; }
   .cell { min-width: 0; min-height: 0; }
   .cell.popup { position: absolute; width: 0; height: 0; overflow: visible; }
 `;

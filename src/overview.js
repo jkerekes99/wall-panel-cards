@@ -257,7 +257,7 @@ class WpSide extends WpBase {
     const hwT = num(h.states[hw.temperature]?.state), hwMode = h.states[hw.mode]?.state, hwOn = h.states[hw.switch]?.state === "on", hwP = num(h.states[hw.power]?.state);
     return `<section class="card clim" data-go="${c.climate_path || ""}">
       <header><div class="ttl">${icon("mdi:thermometer")}<h2>${$esc(c.climate_title || "Climate & Heat Pumps")}</h2></div>${icon("mdi:chevron-right", "chev")}</header>
-      ${c.heat_pump_image ? `<div class="hp ${c.heat_pump_style === "photo" ? "photo" : ""}" style="${c.heat_pump_height ? `height:${+c.heat_pump_height}px` : ""}"><img src="${$esc(c.heat_pump_image)}" alt=""></div>` : ""}
+      ${c.heat_pump_image ? `<div class="hp ${c.heat_pump_style === "photo" ? "photo" : ""}" style="${c.heat_pump_height ? `height:${+c.heat_pump_height}px;` : ""}${c.heat_pump_aspect ? `--hp-ar:${+c.heat_pump_aspect};` : ""}"><img src="${$esc(c.heat_pump_image)}" alt=""></div>` : ""}
       <div class="cl-top">
         <div class="ct"><div class="mini">${icon("mdi:home-thermometer-outline")}House</div><b>${fmt1(avg)}<i>°C</i></b><small>${sum}</small></div>
         ${c.hot_water ? `<div class="ct hw ${hwOn ? "run" : ""}"><div class="mini">${icon("mdi:water-boiler")}Hot water</div><b>${hwT == null ? "–" : Math.round(hwT)}<i>°C</i></b><small>${hwOn ? `Heating${hwP > 20 ? ` · ${(hwP / 1000).toFixed(1)} kW` : ""}` : "Idle"}${hwMode ? ` · ${$esc(hwMode)}` : ""}</small></div>` : ""}
@@ -337,10 +337,13 @@ const WP_SIDE_CSS = `
   .clim { flex: 1; min-height: 0; padding: 16px 18px; display:flex; flex-direction:column; gap: 12px; cursor:pointer; }
   .hp { height: 112px; flex: none; display:flex; align-items:center; justify-content:center; }
   .hp img { height: 100%; width: 100%; object-fit: contain; filter: drop-shadow(0 10px 14px rgba(0,0,0,.35)); }
-  .hp.photo { height: 112px; margin: 0 -18px; }
-  .hp.photo img { width: auto; max-width: 100%; filter: none;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 86%, transparent); -webkit-mask-composite: source-in;
-    mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent), linear-gradient(to bottom, transparent, #000 8%, #000 86%, transparent); mask-composite: intersect; }
+  .clim { container-type: inline-size; }
+  .hp.photo { height: auto; width: auto; margin: 0 -18px; flex: 20 1 0; min-height: 110px; max-height: calc((100cqw + 0px) / var(--hp-ar, 2.26)); overflow: hidden; }
+  .clim:has(.hp.photo) .rlist { flex: 1 0 auto; }
+  .hp.photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; filter: none;
+    -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent); mask-image: linear-gradient(to bottom, #000 82%, transparent); }
+  .clim:has(.hp.photo) { padding-top: 14px; } .clim:has(.hp.photo) .rrow { padding: 3px 4px; font-size: 17px; } .clim:has(.hp.photo) .rs { font-size: 15px; }
+  .clim:has(.hp.photo) { gap: 10px; } .clim:has(.hp.photo) .ct { padding: 9px 14px; } .clim:has(.hp.photo) .ct b { font-size: 32px; }
   .cl-top { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .ct { background: var(--wp-card-2); border:1px solid var(--wp-border); border-radius: 16px; padding: 12px 14px; }
   .mini { display:flex; align-items:center; gap: 6px; color: var(--wp-muted); font-size: 15px; } .mini ha-icon { --mdc-icon-size: 20px; color: var(--wp-heat); }
@@ -406,7 +409,7 @@ const WP_CAR_CSS = `
   .card { display:flex; align-items:center; gap: 22px; padding: 14px 20px; background: var(--wp-card); border:1px solid var(--wp-border); border-radius: var(--wp-radius); box-shadow: var(--wp-shadow); cursor:pointer; }
   .hd { display:flex; gap: 12px; align-items:center; min-width: 170px; white-space: nowrap; } .hd > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); } h2 { margin:0; font-size: 21px; } .hd small { color: var(--wp-muted); font-size: 15px; }
   .car { width: 170px; height: 56px; flex:none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.3)); }
-  .carimg { height: 62px; width: auto; max-width: 200px; flex: none; object-fit: contain; margin: -6px 0; filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
+  .carimg { height: 56px; width: auto; max-width: 175px; flex: none; object-fit: contain; margin: -6px 0; filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
   .bat { flex:1; min-width: 260px; display:grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 16px; align-items:center; }
   .bat b { grid-row: span 2; font-size: 42px; font-weight: 600; } .bat b i { font-style:normal; font-size: 20px; color: var(--wp-muted); }
   .bar { position:relative; height: 12px; border-radius: 999px; background: var(--wp-track); } .bar span { position:absolute; left:0; top:0; bottom:0; border-radius: 999px; } .bar em { position:absolute; top:-4px; bottom:-4px; width: 2px; background: var(--wp-muted); }
