@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.3.0";
+const WP_VERSION = "0.3.1";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -131,8 +131,12 @@ class WpPage extends HTMLElement {
       if (conf.type?.startsWith("custom:wp-") && c.theme_entity && !conf.theme_entity) conf.theme_entity = c.theme_entity;
       if (conf.type?.startsWith("custom:wp-") && c.theme && !conf.theme) conf.theme = c.theme;
       const el = helpers.createCardElement(conf);
-      const wrap = document.createElement("div");
-      wrap.className = "cell" + (popup || conf.type === "custom:bubble-card" ? " popup" : "");
+      const isPopup = !!(popup || conf.type === "custom:bubble-card");
+      // Bubble Card (3.2+) hides the nearest hui-card ancestor while a standalone pop-up is closed.
+      // Here that would be the hui-card holding this whole page, so pop-ups sit in a host whose tag ends in
+      // "-view", which Bubble treats as a layout boundary and stops its search at.
+      const wrap = document.createElement(isPopup ? "wp-popup-view" : "div");
+      wrap.className = "cell" + (isPopup ? " popup" : "");
       if (area) wrap.style.gridArea = area;
       if (style) wrap.setAttribute("style", (wrap.getAttribute("style") || "") + ";" + style);
       wrap.appendChild(el);
@@ -188,6 +192,7 @@ const WP_PAGE_CSS = `
   .cell.popup { position: absolute; width: 0; height: 0; overflow: visible; }
 `;
 if (!customElements.get("wp-page")) customElements.define("wp-page", WpPage);
+if (!customElements.get("wp-popup-view")) customElements.define("wp-popup-view", class extends HTMLElement {});
 
 /* =====================================================================
  * wp-climate: whole-home + per-room AC control (Sensibo-style)
