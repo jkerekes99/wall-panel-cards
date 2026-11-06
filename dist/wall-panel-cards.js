@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.2.0";
+const WP_VERSION = "0.2.1";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -187,7 +187,7 @@ const WP_PAGE_CSS = `
   .cell { min-width: 0; min-height: 0; }
   .cell.popup { position: absolute; width: 0; height: 0; overflow: visible; }
 `;
-customElements.define("wp-page", WpPage);
+if (!customElements.get("wp-page")) customElements.define("wp-page", WpPage);
 
 /* =====================================================================
  * wp-climate: whole-home + per-room AC control (Sensibo-style)
@@ -689,7 +689,7 @@ const WP_CLIMATE_CSS = `
   .toast.show { transform: translate(-50%, 0); opacity: 1; }
   @media (max-width: 1100px) { .wrap { grid-template-columns: 1fr; } .sbody { grid-template-columns: 1fr; } .left { border-right: 0; } }
 `;
-customElements.define("wp-climate", WpClimate);
+if (!customElements.get("wp-climate")) customElements.define("wp-climate", WpClimate);
 
 window.customCards = window.customCards || [];
 window.customCards.push(
@@ -875,7 +875,7 @@ const WP_FLOW_CSS = `
   .vs { display:flex; align-items:center; gap: 2px; font-size: 13px; font-weight: 700; } .vs ha-icon { --mdc-icon-size: 14px; } .vs.up { color: #f59e0b; } .vs.down { color: #22c55e; } .vs small { color: var(--wp-muted); font-weight: 500; margin-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bars { width: 100%; height: 26px; margin-top: 6px; display:block; }
 `;
-customElements.define("wp-power-flow", WpPowerFlow);
+if (!customElements.get("wp-power-flow")) customElements.define("wp-power-flow", WpPowerFlow);
 
 /* ---------------- wp-side: climate summary · people · TV ---------------- */
 const TV_ACTIVE = ["playing", "paused", "on", "idle", "buffering"];
@@ -1019,7 +1019,7 @@ const WP_SIDE_CSS = `
   .rside { display:flex; flex-direction:column; gap: 10px; } .rrow2 { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .pad.acc { background: var(--wp-accent); color:#fff; border-color: transparent; } .pad.off { color: var(--wp-bad); }
   .apps { display:flex; gap: 8px; flex-wrap: wrap; padding: 14px 26px 0; } .app { border:1px solid var(--wp-border); background: var(--wp-card-2); border-radius: 999px; padding: 12px 18px; font-size: 16px; font-weight: 700; cursor:pointer; } .app.on { border-color: var(--wp-accent); color: var(--wp-accent); }
 `;
-customElements.define("wp-side", WpSide);
+if (!customElements.get("wp-side")) customElements.define("wp-side", WpSide);
 
 /* ---------------- wp-car ---------------- */
 class WpCar extends WpBase {
@@ -1058,7 +1058,7 @@ const WP_CAR_CSS = `
   .st { display:flex; align-items:center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--wp-card-2); border:1px solid var(--wp-border); font-weight: 700; font-size: 15px; color: var(--wp-muted); white-space: nowrap; }
   .st ha-icon { --mdc-icon-size: 20px; } .st.chg { color: #06b6d4; border-color: #06b6d4; } .st.plug { color: var(--wp-ok); } .chev { color: var(--wp-muted); }
 `;
-customElements.define("wp-car", WpCar);
+if (!customElements.get("wp-car")) customElements.define("wp-car", WpCar);
 window.customCards.push(
   { type: "wp-power-flow", name: "Wall Panel power flow", description: "Animated live power flow" },
   { type: "wp-side", name: "Wall Panel side column", description: "Climate summary, people and TV" },
