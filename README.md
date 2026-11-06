@@ -16,6 +16,20 @@ Add this repository to Home Assistant's Marketplace (HACS) as a custom **Dashboa
 ## Light / dark
 Set `theme` (`auto` | `light` | `dark`) or `theme_entity` (an `input_select` with Auto/Light/Dark) on `wp-page`; child `wp-*` cards inherit it.
 
+## Status chips (wp-page)
+`chips:` adds count chips to the top bar; tapping one opens a list of what is on/open.
+```yaml
+chips:
+  - name: Lights on
+    entity: sensor.lights_on_count   # number shown on the chip
+    icon: mdi:lightbulb-group
+    color: "#fbbf24"
+    unit: "on"
+    empty: All lights are off
+    control: true                     # per-item "Turn off" + "Turn all off"
+    items: {domain: light}            # or {entities: [...]} or {group: binary_sensor.all_doors}; optional exclude: [...]
+```
+
 ## Photos (optional)
 Images are not shipped in this repo; put your own under `/config/www/...` and reference them as `/local/...`.
 

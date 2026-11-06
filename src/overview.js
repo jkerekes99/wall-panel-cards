@@ -81,6 +81,16 @@ class WpPowerFlow extends WpBase {
     return { photo: false, ratio: 1000 / 390, vb: "0 30 1000 390", home: [510, 330],
       paths: { solar: "M560,150 C560,215 540,262 515,300", grid: "M868,225 C830,300 650,330 552,328", ev: "M468,330 C380,338 300,338 236,330" } };
   }
+  _clampLabels() {
+    const v = this._vis, c = this._config; if (!v || !c.image) return;
+    for (const k of ["solar", "grid", "home", "ev"]) {
+      const el = this.shadowRoot.getElementById(`l-${k}`); if (!el) continue;
+      const q = (c.labels || {})[k]; if (!q) continue;
+      const lw = (el.offsetWidth / v.sw) * 100, lh = (el.offsetHeight / v.sh) * 100, pad = 2;
+      el.style.left = `${Math.min(Math.max(q[0], v.x + pad), 100 - v.x - lw - pad)}%`;
+      el.style.top = `${Math.min(Math.max(q[1], v.y + pad), 100 - v.y - lh - pad)}%`;
+    }
+  }
   _render() {
     const h = this._hass, c = this._config, st = this._stats, r = this.shadowRoot;
     const dark = this.hasAttribute("dark");
@@ -94,8 +104,8 @@ class WpPowerFlow extends WpBase {
       r.innerHTML = `<style>${WP_PALETTE}${WP_FLOW_CSS}</style>
       <section class="card">
         <header><div class="ttl">${icon("mdi:home-lightning-bolt-outline")}<div><h2>Live Power Flow</h2><p id="sub"></p></div></div><div class="chips" id="chips"></div></header>
-        <div class="scene" data-go="${c.tap || ""}"><div class="stage ${G.photo ? "photo" : ""}">
-          ${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">` : WP_HOUSE_SVG(night)}
+        <div class="scene ${G.photo ? "photo" : ""}" data-go="${c.tap || ""}">${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">` : ""}<div class="stage ${G.photo ? "photo" : ""}">
+          ${G.photo ? "" : WP_HOUSE_SVG(night)}
           <svg class="flows" viewBox="${G.vb}" preserveAspectRatio="none"><g id="fl"></g>
             <circle cx="${G.home[0]}" cy="${G.home[1]}" r="34" class="hub"/><foreignObject x="${G.home[0] - 24}" y="${G.home[1] - 24}" width="48" height="48"><div class="hubi">${icon("mdi:home")}</div></foreignObject></svg>
           <div class="lbl" id="l-solar" style="${G.photo ? lp("solar", [62, 4]) : ""}"></div><div class="lbl" id="l-grid" style="${G.photo ? lp("grid", [80, 22]) : ""}"></div>
@@ -105,7 +115,15 @@ class WpPowerFlow extends WpBase {
       </section>`;
       r.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
       const sc = r.querySelector(".scene"), stg = r.querySelector(".stage");
-      const fit = () => { const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return; const sw = Math.min(w, hh * G.ratio); stg.style.width = `${sw}px`; stg.style.height = `${sw / G.ratio}px`; };
+      // Illustration: contain. Photo: cover the whole scene (the image is object-fit: cover with the same centring),
+      // then keep the label boxes inside the visible part.
+      const fit = () => {
+        const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return;
+        const sw = G.photo ? Math.max(w, hh * G.ratio) : Math.min(w, hh * G.ratio), sh = sw / G.ratio;
+        stg.style.width = `${sw}px`; stg.style.height = `${sh}px`;
+        this._vis = { x: ((sw - w) / 2 / sw) * 100, y: ((sh - hh) / 2 / sh) * 100, sw, sh };
+        this._clampLabels();
+      };
       this._ro?.disconnect(); this._ro = new ResizeObserver(fit); this._ro.observe(sc); fit();
     }
     const set = (id, html) => { if (this._parts[id] !== html) { this._parts[id] = html; r.getElementById(id).innerHTML = html; } };
@@ -122,6 +140,7 @@ class WpPowerFlow extends WpBase {
     set("l-grid", `<small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em>`);
     set("l-home", `<small>Home use</small><b>${kW(home)} <i>kW</i></b>`);
     set("l-ev", `<small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em>`);
+    this._clampLabels();
     const sx = c.stats || {};
     const genT = stateNum(h, sx.generation), impT = stateNum(h, sx.import), expT = stateNum(h, sx.export);
     const homeT = genT != null && impT != null && expT != null ? Math.max(0, genT + impT - expT) : null;
@@ -182,6 +201,7 @@ const WP_FLOW_CSS = `
   .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--wp-ok); } .chip.warn i { background: #a78bfa; } .chip.live i { animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { opacity: .25; } }
   .scene { position:relative; flex: 1 1 0; min-height: 240px; cursor:pointer; }
+  .scene.photo { overflow: hidden; margin: 0 -20px; }
   .stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } .stage svg { position:absolute; inset:0; width:100%; height:100%; }
   .fl { fill:none; stroke-width: 5; stroke-linecap: round; opacity: .55; } .photo .fl { opacity: .8; stroke-width: 6; filter: drop-shadow(0 0 4px rgba(0,0,0,.6)); } .fl.idle { stroke: var(--wp-track); opacity: .8; stroke-dasharray: 4 10; }
   .dot { filter: drop-shadow(0 0 6px currentColor); }
@@ -191,8 +211,9 @@ const WP_FLOW_CSS = `
   .lbl small { display:block; color: var(--wp-muted); font-size: 14px; } .lbl b { display:block; font-size: 26px; line-height: 1.15; } .lbl b i { font-style: normal; font-size: 16px; color: var(--wp-muted); }
   .lbl em { display:block; font-style:normal; font-size: 14px; font-weight: 700; color: var(--wp-muted); } .lbl em.y { color: #f59e0b; } .lbl em.p { color: #a78bfa; } .lbl em.g { color: #22c55e; } .lbl em.c { color: #06b6d4; }
   .stage:not(.photo) #l-solar { left: 17.5%; top: 2%; } .stage:not(.photo) #l-grid { left: 70%; top: 6%; } .stage:not(.photo) #l-home { left: 55.5%; top: 77%; } .stage:not(.photo) #l-ev { left: 3%; top: 40%; }
-  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; border-radius: 18px;
-    -webkit-mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 62%, transparent 100%); }
+  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; object-position: 50% 50%;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 88%, transparent);
+    -webkit-mask-composite: source-in; mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 88%, transparent); mask-composite: intersect; }
   .lbl:empty { display:none; }
   .tiles { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .tile { display:flex; gap: 10px; padding: 12px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width: 0; }

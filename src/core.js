@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.3.1";
+const WP_VERSION = "0.4.0";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -18,6 +18,7 @@ function wpIsDark(hass, cfg) {
   if (mode === "light") return false;
   return !!hass?.themes?.darkMode;
 }
+const agoLong = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "under a minute" : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`; };
 const icon = (name, cls = "") => `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
 
 /* ---------- shared palette (inherits into every child card) ---------- */
@@ -98,6 +99,8 @@ class WpPage extends HTMLElement {
     if (!this.shadowRoot) { this.attachShadow({ mode: "open" }); this._build(); }
     this.toggleAttribute("dark", wpIsDark(hass, this._config));
     this._updateHeader();
+    this._renderChips();
+    this._renderLayer();
     (this._children || []).forEach((c) => { c.hass = hass; });
   }
   async _build() {
@@ -107,17 +110,24 @@ class WpPage extends HTMLElement {
       <div class="page">
         <nav class="bar">
           <div class="tabs">${c.tabs.map((t) => `<button class="tab" data-path="${$esc(t.path)}">${icon(t.icon)}<span>${$esc(t.name)}</span></button>`).join("")}</div>
+          ${c.chips?.length ? `<div class="chips" id="chips"></div>` : ""}
           <div class="right">
             <button class="wx" id="wx">${icon("mdi:weather-partly-cloudy", "wxi")}<div><b id="wxt">–</b><small id="wxc"></small></div></button>
             <div class="clock"><b id="time">–</b><small id="date"></small></div>
           </div>
         </nav>
+        <div id="layer"></div>
         <main class="grid" style="${c.grid ? `grid-template-columns:${c.grid.columns || "1fr"};grid-template-rows:${c.grid.rows || "auto"};grid-template-areas:${c.grid.areas || "none"};` : ""}"></main>
       </div>`;
     root.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       const base = c.base || location.pathname.split("/").slice(0, 2).join("/");
       navigate(`${base}/${b.dataset.path}`);
     }));
+    root.getElementById("chips")?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-chip]"); if (!b) return;
+      this._chipOpen = +b.dataset.chip; this._chipAnim = Date.now() + 450; this._renderLayer();
+    });
+    root.getElementById("layer").addEventListener("click", (e) => this._layerClick(e));
     root.getElementById("wx").addEventListener("click", () => {
       if (c.weather_popup) navigate(`${location.pathname}${c.weather_popup}`);
     });
@@ -146,6 +156,62 @@ class WpPage extends HTMLElement {
     });
     this._built = true;
     if (this._hass) this.hass = this._hass;
+  }
+  /* ---------- status chips + "what's on" list dialog ---------- */
+  _chipItems(ch) {
+    const h = this._hass, src = ch.items || {}, on = ch.on_state || "on";
+    let ids = [];
+    if (src.entities) ids = src.entities;
+    else if (src.group) ids = h.states[src.group]?.attributes?.entity_id || [];
+    else if (src.domain) ids = Object.keys(h.states).filter((id) => id.startsWith(`${src.domain}.`) && !Array.isArray(h.states[id].attributes?.entity_id));
+    const ex = new Set(src.exclude || []);
+    return ids.filter((id) => !ex.has(id)).map((id) => h.states[id]).filter((st) => st && st.state === on)
+      .sort((a, b) => (a.attributes.friendly_name || a.entity_id).localeCompare(b.attributes.friendly_name || b.entity_id));
+  }
+  _renderChips() {
+    const el = this.shadowRoot?.getElementById("chips"); if (!el || !this._hass) return;
+    const html = this._config.chips.map((ch, i) => {
+      const n = ch.entity ? num(this._hass.states[ch.entity]?.state) : this._chipItems(ch).length;
+      return `<button class="chip ${n ? "" : "zero"}" data-chip="${i}" style="--chip:${$esc(ch.color || "var(--wp-accent)")}" aria-label="${$esc(ch.name || "")}">${icon(ch.icon || "mdi:circle")}<b>${n ?? "–"}</b></button>`;
+    }).join("");
+    if (html !== this._chipsHtml) { this._chipsHtml = html; el.innerHTML = html; }
+  }
+  _renderLayer() {
+    const el = this.shadowRoot?.getElementById("layer"); if (!el || !this._hass) return;
+    let html = "";
+    const ch = this._chipOpen != null ? this._config.chips?.[this._chipOpen] : null;
+    if (ch) {
+      const h = this._hass, items = this._chipItems(ch), ctl = !!ch.control;
+      const area = (st) => { const e = h.entities?.[st.entity_id]; const a = e?.area_id || (e?.device_id && h.devices?.[e.device_id]?.area_id); return a ? h.areas?.[a]?.name : null; };
+      const rows = items.map((st) => {
+        const a = st.attributes, bri = a.brightness != null ? `${Math.round((a.brightness / 255) * 100)}%` : null;
+        const sub = [area(st), bri, `${ch.since || "on"} for ${agoLong(st.last_changed)}`].filter(Boolean).join(" · ");
+        return `<div class="li"><span class="lic" style="--chip:${$esc(ch.color || "var(--wp-accent)")}">${icon(a.icon || ch.item_icon || ch.icon)}</span>
+          <div class="lit"><b>${$esc(a.friendly_name || st.entity_id)}</b><small>${$esc(sub)}</small></div>
+          ${ctl ? `<button class="off" data-off="${$esc(st.entity_id)}">${icon("mdi:power")}Turn off</button>` : ""}</div>`;
+      }).join("");
+      const anim = (this._chipAnim || 0) > Date.now() ? " anim" : "";
+      html = `<div class="ov${anim}" data-close="1"></div>
+        <section class="dlg${anim}" role="dialog">
+          <header><span class="lic big" style="--chip:${$esc(ch.color || "var(--wp-accent)")}">${icon(ch.icon || "mdi:circle")}</span>
+            <div><h3>${$esc(ch.name || "")}</h3><p>${`${items.length} ${$esc(ch.unit || "")}`.trim()}</p></div>
+            ${ctl && items.length > 1 ? `<button class="alloff" data-alloff="1">${icon("mdi:power")}Turn all off</button>` : ""}
+            <button class="x" data-close="1" aria-label="Close">${icon("mdi:close")}</button></header>
+          <div class="list">${rows || `<div class="empty">${icon(ch.icon || "mdi:check")}<span>${$esc(ch.empty || "Nothing to show")}</span></div>`}</div>
+        </section>`;
+    }
+    if (html !== this._layerHtml) { this._layerHtml = html; el.innerHTML = html; }
+  }
+  _layerClick(e) {
+    const t = e.target.closest("[data-close],[data-off],[data-alloff]"); if (!t) return;
+    const ch = this._config.chips?.[this._chipOpen];
+    if (t.dataset.close) { this._chipOpen = null; this._renderLayer(); return; }
+    if (!ch) return;
+    const ids = t.dataset.off ? [t.dataset.off] : this._chipItems(ch).map((st) => st.entity_id);
+    const byDomain = {};
+    ids.forEach((id) => { (byDomain[id.split(".")[0]] ||= []).push(id); });
+    Object.entries(byDomain).forEach(([d, list]) => this._hass.callService(d, "turn_off", { entity_id: list }));
+    t.disabled = true; t.classList.add("busy");
   }
   _markActive() {
     const seg = location.pathname.split("/").filter(Boolean).pop();
@@ -187,6 +253,30 @@ const WP_PAGE_CSS = `
   .wx small, .clock small { display:block; color: var(--wp-muted); font-size: 13px; }
   .clock { text-align: right; padding: 0 8px; min-width: 104px; }
   .clock b { font-size: 24px; }
+  .chips { display:flex; gap: 8px; flex: none; }
+  .chip { all: unset; cursor: pointer; display:flex; align-items:center; gap: 7px; height: 46px; padding: 0 14px 0 12px; border-radius: 14px; background: color-mix(in srgb, var(--chip) 16%, transparent); color: var(--wp-text); font-size: 19px; font-weight: 700; transition: opacity .2s, background .2s; }
+  .chip ha-icon { --mdc-icon-size: 24px; color: var(--chip); }
+  .chip.zero { background: var(--wp-card-2); opacity: .5; } .chip.zero ha-icon { color: var(--wp-muted); }
+  .chip:active { transform: scale(.96); }
+  .ov { position: fixed; inset: 0; z-index: 40; background: rgba(3, 8, 20, .55); backdrop-filter: blur(6px); } .ov.anim { animation: wpfade .2s; }
+  .dlg { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, 92vw); max-height: 82vh; display:flex; flex-direction:column; background: var(--wp-card); border: 1px solid var(--wp-border); border-radius: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.45); overflow:hidden; color: var(--wp-text); }
+  :host(:not([dark])) .dlg { background: #fff; }
+  .dlg.anim { animation: wppop .22s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes wpfade { from { opacity: 0; } } @keyframes wppop { from { opacity: 0; transform: translate(-50%, -48%) scale(.96); } }
+  .dlg header { display:flex; align-items:center; gap: 14px; padding: 20px 20px 16px 22px; border-bottom: 1px solid var(--wp-border); }
+  .dlg header > div { flex: 1; min-width: 0; }
+  .dlg h3 { margin: 0; font-size: 24px; } .dlg header p { margin: 2px 0 0; color: var(--wp-muted); font-size: 15px; }
+  .lic { flex:none; width: 48px; height: 48px; border-radius: 14px; display:grid; place-items:center; background: color-mix(in srgb, var(--chip) 16%, transparent); }
+  .lic ha-icon { --mdc-icon-size: 26px; color: var(--chip); } .lic.big { width: 54px; height: 54px; }
+  .x, .off, .alloff { all: unset; cursor: pointer; display:flex; align-items:center; justify-content:center; gap: 8px; border-radius: 14px; font-weight: 700; }
+  .x { width: 52px; height: 52px; border-radius: 50%; background: var(--wp-card-2); } .x ha-icon { --mdc-icon-size: 26px; }
+  .off, .alloff { height: 50px; padding: 0 18px; font-size: 17px; background: var(--wp-card-2); color: var(--wp-text); } .off ha-icon, .alloff ha-icon { --mdc-icon-size: 22px; color: #f87171; }
+  .alloff { background: color-mix(in srgb, #ef4444 16%, transparent); }
+  .off.busy, .alloff.busy { opacity: .5; }
+  .list { overflow-y: auto; padding: 8px 12px 14px; }
+  .li { display:flex; align-items:center; gap: 14px; padding: 12px 10px; border-bottom: 1px solid var(--wp-border); } .li:last-child { border-bottom: 0; }
+  .lit { flex: 1; min-width: 0; } .lit b { display:block; font-size: 19px; } .lit small { display:block; color: var(--wp-muted); font-size: 15px; margin-top: 2px; }
+  .empty { display:flex; flex-direction:column; align-items:center; gap: 10px; padding: 36px 10px; color: var(--wp-muted); font-size: 18px; } .empty ha-icon { --mdc-icon-size: 40px; opacity: .6; }
   .grid { flex:1; display:grid; gap: var(--wp-gap); min-height: 0; }
   .cell { min-width: 0; min-height: 0; }
   .cell.popup { position: absolute; width: 0; height: 0; overflow: visible; }

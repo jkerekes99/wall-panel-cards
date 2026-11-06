@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.3.1";
+const WP_VERSION = "0.4.0";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -18,6 +18,7 @@ function wpIsDark(hass, cfg) {
   if (mode === "light") return false;
   return !!hass?.themes?.darkMode;
 }
+const agoLong = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "under a minute" : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`; };
 const icon = (name, cls = "") => `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
 
 /* ---------- shared palette (inherits into every child card) ---------- */
@@ -98,6 +99,8 @@ class WpPage extends HTMLElement {
     if (!this.shadowRoot) { this.attachShadow({ mode: "open" }); this._build(); }
     this.toggleAttribute("dark", wpIsDark(hass, this._config));
     this._updateHeader();
+    this._renderChips();
+    this._renderLayer();
     (this._children || []).forEach((c) => { c.hass = hass; });
   }
   async _build() {
@@ -107,17 +110,24 @@ class WpPage extends HTMLElement {
       <div class="page">
         <nav class="bar">
           <div class="tabs">${c.tabs.map((t) => `<button class="tab" data-path="${$esc(t.path)}">${icon(t.icon)}<span>${$esc(t.name)}</span></button>`).join("")}</div>
+          ${c.chips?.length ? `<div class="chips" id="chips"></div>` : ""}
           <div class="right">
             <button class="wx" id="wx">${icon("mdi:weather-partly-cloudy", "wxi")}<div><b id="wxt">–</b><small id="wxc"></small></div></button>
             <div class="clock"><b id="time">–</b><small id="date"></small></div>
           </div>
         </nav>
+        <div id="layer"></div>
         <main class="grid" style="${c.grid ? `grid-template-columns:${c.grid.columns || "1fr"};grid-template-rows:${c.grid.rows || "auto"};grid-template-areas:${c.grid.areas || "none"};` : ""}"></main>
       </div>`;
     root.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
       const base = c.base || location.pathname.split("/").slice(0, 2).join("/");
       navigate(`${base}/${b.dataset.path}`);
     }));
+    root.getElementById("chips")?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-chip]"); if (!b) return;
+      this._chipOpen = +b.dataset.chip; this._chipAnim = Date.now() + 450; this._renderLayer();
+    });
+    root.getElementById("layer").addEventListener("click", (e) => this._layerClick(e));
     root.getElementById("wx").addEventListener("click", () => {
       if (c.weather_popup) navigate(`${location.pathname}${c.weather_popup}`);
     });
@@ -146,6 +156,62 @@ class WpPage extends HTMLElement {
     });
     this._built = true;
     if (this._hass) this.hass = this._hass;
+  }
+  /* ---------- status chips + "what's on" list dialog ---------- */
+  _chipItems(ch) {
+    const h = this._hass, src = ch.items || {}, on = ch.on_state || "on";
+    let ids = [];
+    if (src.entities) ids = src.entities;
+    else if (src.group) ids = h.states[src.group]?.attributes?.entity_id || [];
+    else if (src.domain) ids = Object.keys(h.states).filter((id) => id.startsWith(`${src.domain}.`) && !Array.isArray(h.states[id].attributes?.entity_id));
+    const ex = new Set(src.exclude || []);
+    return ids.filter((id) => !ex.has(id)).map((id) => h.states[id]).filter((st) => st && st.state === on)
+      .sort((a, b) => (a.attributes.friendly_name || a.entity_id).localeCompare(b.attributes.friendly_name || b.entity_id));
+  }
+  _renderChips() {
+    const el = this.shadowRoot?.getElementById("chips"); if (!el || !this._hass) return;
+    const html = this._config.chips.map((ch, i) => {
+      const n = ch.entity ? num(this._hass.states[ch.entity]?.state) : this._chipItems(ch).length;
+      return `<button class="chip ${n ? "" : "zero"}" data-chip="${i}" style="--chip:${$esc(ch.color || "var(--wp-accent)")}" aria-label="${$esc(ch.name || "")}">${icon(ch.icon || "mdi:circle")}<b>${n ?? "–"}</b></button>`;
+    }).join("");
+    if (html !== this._chipsHtml) { this._chipsHtml = html; el.innerHTML = html; }
+  }
+  _renderLayer() {
+    const el = this.shadowRoot?.getElementById("layer"); if (!el || !this._hass) return;
+    let html = "";
+    const ch = this._chipOpen != null ? this._config.chips?.[this._chipOpen] : null;
+    if (ch) {
+      const h = this._hass, items = this._chipItems(ch), ctl = !!ch.control;
+      const area = (st) => { const e = h.entities?.[st.entity_id]; const a = e?.area_id || (e?.device_id && h.devices?.[e.device_id]?.area_id); return a ? h.areas?.[a]?.name : null; };
+      const rows = items.map((st) => {
+        const a = st.attributes, bri = a.brightness != null ? `${Math.round((a.brightness / 255) * 100)}%` : null;
+        const sub = [area(st), bri, `${ch.since || "on"} for ${agoLong(st.last_changed)}`].filter(Boolean).join(" · ");
+        return `<div class="li"><span class="lic" style="--chip:${$esc(ch.color || "var(--wp-accent)")}">${icon(a.icon || ch.item_icon || ch.icon)}</span>
+          <div class="lit"><b>${$esc(a.friendly_name || st.entity_id)}</b><small>${$esc(sub)}</small></div>
+          ${ctl ? `<button class="off" data-off="${$esc(st.entity_id)}">${icon("mdi:power")}Turn off</button>` : ""}</div>`;
+      }).join("");
+      const anim = (this._chipAnim || 0) > Date.now() ? " anim" : "";
+      html = `<div class="ov${anim}" data-close="1"></div>
+        <section class="dlg${anim}" role="dialog">
+          <header><span class="lic big" style="--chip:${$esc(ch.color || "var(--wp-accent)")}">${icon(ch.icon || "mdi:circle")}</span>
+            <div><h3>${$esc(ch.name || "")}</h3><p>${`${items.length} ${$esc(ch.unit || "")}`.trim()}</p></div>
+            ${ctl && items.length > 1 ? `<button class="alloff" data-alloff="1">${icon("mdi:power")}Turn all off</button>` : ""}
+            <button class="x" data-close="1" aria-label="Close">${icon("mdi:close")}</button></header>
+          <div class="list">${rows || `<div class="empty">${icon(ch.icon || "mdi:check")}<span>${$esc(ch.empty || "Nothing to show")}</span></div>`}</div>
+        </section>`;
+    }
+    if (html !== this._layerHtml) { this._layerHtml = html; el.innerHTML = html; }
+  }
+  _layerClick(e) {
+    const t = e.target.closest("[data-close],[data-off],[data-alloff]"); if (!t) return;
+    const ch = this._config.chips?.[this._chipOpen];
+    if (t.dataset.close) { this._chipOpen = null; this._renderLayer(); return; }
+    if (!ch) return;
+    const ids = t.dataset.off ? [t.dataset.off] : this._chipItems(ch).map((st) => st.entity_id);
+    const byDomain = {};
+    ids.forEach((id) => { (byDomain[id.split(".")[0]] ||= []).push(id); });
+    Object.entries(byDomain).forEach(([d, list]) => this._hass.callService(d, "turn_off", { entity_id: list }));
+    t.disabled = true; t.classList.add("busy");
   }
   _markActive() {
     const seg = location.pathname.split("/").filter(Boolean).pop();
@@ -187,6 +253,30 @@ const WP_PAGE_CSS = `
   .wx small, .clock small { display:block; color: var(--wp-muted); font-size: 13px; }
   .clock { text-align: right; padding: 0 8px; min-width: 104px; }
   .clock b { font-size: 24px; }
+  .chips { display:flex; gap: 8px; flex: none; }
+  .chip { all: unset; cursor: pointer; display:flex; align-items:center; gap: 7px; height: 46px; padding: 0 14px 0 12px; border-radius: 14px; background: color-mix(in srgb, var(--chip) 16%, transparent); color: var(--wp-text); font-size: 19px; font-weight: 700; transition: opacity .2s, background .2s; }
+  .chip ha-icon { --mdc-icon-size: 24px; color: var(--chip); }
+  .chip.zero { background: var(--wp-card-2); opacity: .5; } .chip.zero ha-icon { color: var(--wp-muted); }
+  .chip:active { transform: scale(.96); }
+  .ov { position: fixed; inset: 0; z-index: 40; background: rgba(3, 8, 20, .55); backdrop-filter: blur(6px); } .ov.anim { animation: wpfade .2s; }
+  .dlg { position: fixed; z-index: 41; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(640px, 92vw); max-height: 82vh; display:flex; flex-direction:column; background: var(--wp-card); border: 1px solid var(--wp-border); border-radius: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.45); overflow:hidden; color: var(--wp-text); }
+  :host(:not([dark])) .dlg { background: #fff; }
+  .dlg.anim { animation: wppop .22s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes wpfade { from { opacity: 0; } } @keyframes wppop { from { opacity: 0; transform: translate(-50%, -48%) scale(.96); } }
+  .dlg header { display:flex; align-items:center; gap: 14px; padding: 20px 20px 16px 22px; border-bottom: 1px solid var(--wp-border); }
+  .dlg header > div { flex: 1; min-width: 0; }
+  .dlg h3 { margin: 0; font-size: 24px; } .dlg header p { margin: 2px 0 0; color: var(--wp-muted); font-size: 15px; }
+  .lic { flex:none; width: 48px; height: 48px; border-radius: 14px; display:grid; place-items:center; background: color-mix(in srgb, var(--chip) 16%, transparent); }
+  .lic ha-icon { --mdc-icon-size: 26px; color: var(--chip); } .lic.big { width: 54px; height: 54px; }
+  .x, .off, .alloff { all: unset; cursor: pointer; display:flex; align-items:center; justify-content:center; gap: 8px; border-radius: 14px; font-weight: 700; }
+  .x { width: 52px; height: 52px; border-radius: 50%; background: var(--wp-card-2); } .x ha-icon { --mdc-icon-size: 26px; }
+  .off, .alloff { height: 50px; padding: 0 18px; font-size: 17px; background: var(--wp-card-2); color: var(--wp-text); } .off ha-icon, .alloff ha-icon { --mdc-icon-size: 22px; color: #f87171; }
+  .alloff { background: color-mix(in srgb, #ef4444 16%, transparent); }
+  .off.busy, .alloff.busy { opacity: .5; }
+  .list { overflow-y: auto; padding: 8px 12px 14px; }
+  .li { display:flex; align-items:center; gap: 14px; padding: 12px 10px; border-bottom: 1px solid var(--wp-border); } .li:last-child { border-bottom: 0; }
+  .lit { flex: 1; min-width: 0; } .lit b { display:block; font-size: 19px; } .lit small { display:block; color: var(--wp-muted); font-size: 15px; margin-top: 2px; }
+  .empty { display:flex; flex-direction:column; align-items:center; gap: 10px; padding: 36px 10px; color: var(--wp-muted); font-size: 18px; } .empty ha-icon { --mdc-icon-size: 40px; opacity: .6; }
   .grid { flex:1; display:grid; gap: var(--wp-gap); min-height: 0; }
   .cell { min-width: 0; min-height: 0; }
   .cell.popup { position: absolute; width: 0; height: 0; overflow: visible; }
@@ -826,6 +916,16 @@ class WpPowerFlow extends WpBase {
     return { photo: false, ratio: 1000 / 390, vb: "0 30 1000 390", home: [510, 330],
       paths: { solar: "M560,150 C560,215 540,262 515,300", grid: "M868,225 C830,300 650,330 552,328", ev: "M468,330 C380,338 300,338 236,330" } };
   }
+  _clampLabels() {
+    const v = this._vis, c = this._config; if (!v || !c.image) return;
+    for (const k of ["solar", "grid", "home", "ev"]) {
+      const el = this.shadowRoot.getElementById(`l-${k}`); if (!el) continue;
+      const q = (c.labels || {})[k]; if (!q) continue;
+      const lw = (el.offsetWidth / v.sw) * 100, lh = (el.offsetHeight / v.sh) * 100, pad = 2;
+      el.style.left = `${Math.min(Math.max(q[0], v.x + pad), 100 - v.x - lw - pad)}%`;
+      el.style.top = `${Math.min(Math.max(q[1], v.y + pad), 100 - v.y - lh - pad)}%`;
+    }
+  }
   _render() {
     const h = this._hass, c = this._config, st = this._stats, r = this.shadowRoot;
     const dark = this.hasAttribute("dark");
@@ -839,8 +939,8 @@ class WpPowerFlow extends WpBase {
       r.innerHTML = `<style>${WP_PALETTE}${WP_FLOW_CSS}</style>
       <section class="card">
         <header><div class="ttl">${icon("mdi:home-lightning-bolt-outline")}<div><h2>Live Power Flow</h2><p id="sub"></p></div></div><div class="chips" id="chips"></div></header>
-        <div class="scene" data-go="${c.tap || ""}"><div class="stage ${G.photo ? "photo" : ""}">
-          ${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">` : WP_HOUSE_SVG(night)}
+        <div class="scene ${G.photo ? "photo" : ""}" data-go="${c.tap || ""}">${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">` : ""}<div class="stage ${G.photo ? "photo" : ""}">
+          ${G.photo ? "" : WP_HOUSE_SVG(night)}
           <svg class="flows" viewBox="${G.vb}" preserveAspectRatio="none"><g id="fl"></g>
             <circle cx="${G.home[0]}" cy="${G.home[1]}" r="34" class="hub"/><foreignObject x="${G.home[0] - 24}" y="${G.home[1] - 24}" width="48" height="48"><div class="hubi">${icon("mdi:home")}</div></foreignObject></svg>
           <div class="lbl" id="l-solar" style="${G.photo ? lp("solar", [62, 4]) : ""}"></div><div class="lbl" id="l-grid" style="${G.photo ? lp("grid", [80, 22]) : ""}"></div>
@@ -850,7 +950,15 @@ class WpPowerFlow extends WpBase {
       </section>`;
       r.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
       const sc = r.querySelector(".scene"), stg = r.querySelector(".stage");
-      const fit = () => { const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return; const sw = Math.min(w, hh * G.ratio); stg.style.width = `${sw}px`; stg.style.height = `${sw / G.ratio}px`; };
+      // Illustration: contain. Photo: cover the whole scene (the image is object-fit: cover with the same centring),
+      // then keep the label boxes inside the visible part.
+      const fit = () => {
+        const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return;
+        const sw = G.photo ? Math.max(w, hh * G.ratio) : Math.min(w, hh * G.ratio), sh = sw / G.ratio;
+        stg.style.width = `${sw}px`; stg.style.height = `${sh}px`;
+        this._vis = { x: ((sw - w) / 2 / sw) * 100, y: ((sh - hh) / 2 / sh) * 100, sw, sh };
+        this._clampLabels();
+      };
       this._ro?.disconnect(); this._ro = new ResizeObserver(fit); this._ro.observe(sc); fit();
     }
     const set = (id, html) => { if (this._parts[id] !== html) { this._parts[id] = html; r.getElementById(id).innerHTML = html; } };
@@ -867,6 +975,7 @@ class WpPowerFlow extends WpBase {
     set("l-grid", `<small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em>`);
     set("l-home", `<small>Home use</small><b>${kW(home)} <i>kW</i></b>`);
     set("l-ev", `<small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em>`);
+    this._clampLabels();
     const sx = c.stats || {};
     const genT = stateNum(h, sx.generation), impT = stateNum(h, sx.import), expT = stateNum(h, sx.export);
     const homeT = genT != null && impT != null && expT != null ? Math.max(0, genT + impT - expT) : null;
@@ -927,6 +1036,7 @@ const WP_FLOW_CSS = `
   .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--wp-ok); } .chip.warn i { background: #a78bfa; } .chip.live i { animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { opacity: .25; } }
   .scene { position:relative; flex: 1 1 0; min-height: 240px; cursor:pointer; }
+  .scene.photo { overflow: hidden; margin: 0 -20px; }
   .stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } .stage svg { position:absolute; inset:0; width:100%; height:100%; }
   .fl { fill:none; stroke-width: 5; stroke-linecap: round; opacity: .55; } .photo .fl { opacity: .8; stroke-width: 6; filter: drop-shadow(0 0 4px rgba(0,0,0,.6)); } .fl.idle { stroke: var(--wp-track); opacity: .8; stroke-dasharray: 4 10; }
   .dot { filter: drop-shadow(0 0 6px currentColor); }
@@ -936,8 +1046,9 @@ const WP_FLOW_CSS = `
   .lbl small { display:block; color: var(--wp-muted); font-size: 14px; } .lbl b { display:block; font-size: 26px; line-height: 1.15; } .lbl b i { font-style: normal; font-size: 16px; color: var(--wp-muted); }
   .lbl em { display:block; font-style:normal; font-size: 14px; font-weight: 700; color: var(--wp-muted); } .lbl em.y { color: #f59e0b; } .lbl em.p { color: #a78bfa; } .lbl em.g { color: #22c55e; } .lbl em.c { color: #06b6d4; }
   .stage:not(.photo) #l-solar { left: 17.5%; top: 2%; } .stage:not(.photo) #l-grid { left: 70%; top: 6%; } .stage:not(.photo) #l-home { left: 55.5%; top: 77%; } .stage:not(.photo) #l-ev { left: 3%; top: 40%; }
-  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; border-radius: 18px;
-    -webkit-mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 62%, transparent 100%); }
+  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; object-position: 50% 50%;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 88%, transparent);
+    -webkit-mask-composite: source-in; mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 88%, transparent); mask-composite: intersect; }
   .lbl:empty { display:none; }
   .tiles { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .tile { display:flex; gap: 10px; padding: 12px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width: 0; }
