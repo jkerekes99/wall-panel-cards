@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.2.1";
+const WP_VERSION = "0.3.0";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -66,7 +66,7 @@ const COND = {
 };
 const DEFAULT_TABS = [
   { name: "Overview", icon: "mdi:home-variant", path: "overview" },
-  { name: "Climate", icon: "mdi:thermostat", path: "climate" },
+  { name: "Climate", icon: "mdi:thermometer", path: "climate" },
   { name: "Energy", icon: "mdi:lightning-bolt", path: "energy" },
   { name: "Solar", icon: "mdi:solar-power-variant", path: "solar" },
   { name: "Cars", icon: "mdi:car-electric", path: "cars" },
@@ -213,7 +213,6 @@ const HVANE_SEM = [["auto", "Auto", ["auto", "stopped"]], ["swing", "Swing", ["s
 const VANE_ANGLE = { top: 8, upper: 26, middle: 44, lower: 62, bottom: 80 };
 const HVANE_ANGLE = { farleft: -50, left: -25, centre: 0, right: 25, farright: 50 };
 const PRESET_LABEL = { normal: "Normal", quiet: "Quiet", powerful: "Powerful", none: "None", eco: "Eco", boost: "Boost", comfort: "Comfort" };
-const TIMER_STEPS = [30, 60, 120, 180, 240];
 
 function semOptions(raw, SEM) {
   if (!raw) return [];
@@ -249,7 +248,7 @@ class WpClimate extends HTMLElement {
     if (this.shadowRoot) this._render();
   }
   getCardSize() { return 10; }
-  connectedCallback() { this._tick = setInterval(() => this._modal && this._render(), 20000); }
+  connectedCallback() { this._tick = setInterval(() => this._render(), 20000); }
   disconnectedCallback() { clearInterval(this._tick); }
   set hass(hass) {
     const first = !this._hass;
@@ -291,7 +290,8 @@ class WpClimate extends HTMLElement {
   _timer(taskId) {
     const t = this._hass.states[this._config.timer_entity]?.attributes?.active_tasks?.[taskId];
     if (!t) return null;
-    const left = Math.max(0, t.end_timestamp * 1000 - Date.now());
+    const left = t.end_timestamp * 1000 - Date.now();
+    if (left <= 0) return null;
     return { left, label: t.task_label, off: (t.finish_actions?.[0]?.service || "").endsWith("turn_off") };
   }
   _taskId(i) { return i === "all" ? "wp_ac_all" : `wp_ac_${this._config.rooms[i].climate.split(".")[1]}`; }
@@ -358,13 +358,20 @@ class WpClimate extends HTMLElement {
   _render() {
     if (!this._hass || !this.shadowRoot) return;
     const rooms = this._config.rooms.map((_, i) => this._room(i));
-    const scrollY = this.shadowRoot.querySelector(".sheet .right")?.scrollTop;
-    this.shadowRoot.innerHTML = `<style>${WP_PALETTE}${WP_CLIMATE_CSS}</style>
+    const anim = this._animUntil > Date.now() ? " anim" : "";
+    const html = `<style>${WP_PALETTE}${WP_CLIMATE_CSS}</style>
       <div class="wrap">${this._homeHtml(rooms)}<div class="rooms n${rooms.length}">${rooms.map((r) => this._roomHtml(r)).join("")}</div></div>
-      ${this._modal ? this._modalHtml(rooms) : ""}<div class="toast"></div>`;
+      ${this._modal ? this._modalHtml(rooms).replace(/class="(scrim|sheet)/g, `class="$1${this._tsheet ? "" : anim}`) : ""}
+      ${this._tsheet ? this._timerSheet(this._tsheet.i).replace(/class="(scrim|sheet)/g, `class="$1${anim}`) : ""}<div class="toast"></div>`;
+    if (html === this._lastHtml) return; // nothing visible changed: keep the DOM (no flicker)
+    this._lastHtml = html;
+    const scrollY = this.shadowRoot.querySelector(".sheet .right")?.scrollTop;
+    this.shadowRoot.innerHTML = html;
     if (scrollY) { const el = this.shadowRoot.querySelector(".sheet .right"); if (el) el.scrollTop = scrollY; }
     this._bind();
+    this._bindWheels();
   }
+  _open(patch) { Object.assign(this, patch); this._animUntil = Date.now() + 450; this._render(); }
   _homeHtml(rooms) {
     const h = this._hass; const c = this._config;
     const temps = rooms.map((r) => r.cur).filter((v) => v != null);
@@ -373,7 +380,6 @@ class WpClimate extends HTMLElement {
     const avgH = hums.length ? Math.round(hums.reduce((s, v) => s + v, 0) / hums.length) : null;
     const out = c.outdoor ? (c.outdoor.startsWith("weather.") ? num(h.states[c.outdoor]?.attributes.temperature) : num(h.states[c.outdoor]?.state)) : null;
     const onCount = rooms.filter((r) => r.on).length;
-    const pw = c.power_total ? num(h.states[c.power_total]?.state) : null;
     const tmr = this._timer(this._taskId("all"));
     const modesOn = [...new Set(rooms.filter((r) => r.on).map((r) => r.mode))];
     const accent = modesOn.length === 1 ? MODES[modesOn[0]]?.c || "auto" : onCount ? "auto" : "off";
@@ -384,7 +390,6 @@ class WpClimate extends HTMLElement {
       <div class="stats">
         <div>${icon("mdi:water-percent")}<b>${avgH ?? "–"}%</b><small>humidity</small></div>
         <div>${icon("mdi:home-thermometer-outline")}<b>${out == null ? "–" : `${fmt1(out)}°`}</b><small>outside</small></div>
-        <div>${icon("mdi:flash")}<b>${pw == null ? "–" : pw >= 1000 ? `${(pw / 1000).toFixed(1)} kW` : `${Math.round(pw)} W`}</b><small>AC power</small></div>
       </div>
       ${this._homeSetHtml(rooms)}
       <div class="allbtns">
@@ -448,7 +453,6 @@ class WpClimate extends HTMLElement {
   /* ---------- modal ---------- */
   _modalHtml(rooms) {
     const M = this._modal;
-    if (M.kind === "timer") return this._timerSheet(M.idx);
     const all = M.kind === "all";
     const sel = all ? rooms.filter((r) => M.sel.has(r.i) && !r.unavailable) : [rooms[M.idx]];
     const r0 = sel[0] || rooms[0];
@@ -477,7 +481,7 @@ class WpClimate extends HTMLElement {
     <div class="sheet m-${mc}">
       <header>
         <div class="sh-title">${icon(all ? "mdi:home-thermometer" : r0.cfg.icon || "mdi:air-conditioner")}<div><h2>${all ? "All rooms" : $esc(r0.cfg.name)}</h2>
-          <p>${all ? `Changes apply to ${sel.length} selected room${sel.length === 1 ? "" : "s"}` : `${fmt1(r0.cur)}° inside · ${r0.hum == null ? "–" : Math.round(r0.hum)}% humidity${r0.power != null ? ` · ${Math.round(r0.power)} W` : ""}`}</p></div></div>
+          <p>${all ? `Changes apply to ${sel.length} selected room${sel.length === 1 ? "" : "s"}` : `${fmt1(r0.cur)}° inside · ${r0.hum == null ? "–" : Math.round(r0.hum)}% humidity`}</p></div></div>
         <button class="x" data-act="close" aria-label="Close">${icon("mdi:close")}</button>
       </header>
       ${all ? `<div class="chips">${rooms.map((r) => `<button class="chip ${M.sel.has(r.i) ? "on" : ""} ${r.unavailable ? "unav" : ""}" data-act="sel" data-i="${r.i}">${icon(M.sel.has(r.i) ? "mdi:checkbox-marked-circle" : "mdi:checkbox-blank-circle-outline")}${$esc(r.cfg.name)}<small>${r.on ? MODES[r.mode]?.label : "Off"}</small></button>`).join("")}</div>` : ""}
@@ -497,7 +501,7 @@ class WpClimate extends HTMLElement {
           <button class="powerbtn ${anyOn ? "is-on" : ""}" data-act="${all ? (anyOn ? "selOff" : "selOn") : "power"}" data-i="${r0.i}">${icon("mdi:power")}${anyOn ? (all ? "Turn selected off" : "Turn off") : (all ? "Turn selected on" : "Turn on")}</button>
           <div class="timerline">${tmr
             ? `${icon("mdi:timer-sand")}<span><b>${tmr.off ? "Turns off" : "Turns on"} in ${this._fmtLeft(tmr.left)}</b></span><button class="link" data-act="tcancel" data-i="${all ? "all" : r0.i}">Cancel</button>`
-            : `${icon("mdi:timer-outline")}<span>${anyOn ? "Turn off in" : "Turn on in"}</span>${TIMER_STEPS.slice(0, 4).map((m) => `<button class="tbtn" data-act="tset" data-i="${all ? "all" : r0.i}" data-m="${m}">${m < 60 ? `${m}m` : `${m / 60}h`}</button>`).join("")}`}</div>
+            : `<button class="tbtn" data-act="topen" data-i="${all ? "all" : r0.i}">${icon("mdi:timer-outline")}${all ? "Timer for selected rooms" : "Timer"}</button>`}</div>
         </div>
         <div class="right">
           ${this._group("Mode", modes.map((m) => ({ key: m, label: MODES[m].label, icon: MODES[m].icon, on: anyOn && mode === m, cls: `m-${MODES[m].c}` })), all ? "allmode" : "mode")}
@@ -522,15 +526,39 @@ class WpClimate extends HTMLElement {
   }
   _timerSheet(i) {
     const tmr = this._timer(this._taskId(i));
-    const ids = i === "all" ? this._config.rooms.map((r) => r.climate) : [this._config.rooms[i].climate];
+    const only = this._tsheet?.only;
+    const ids = only && only.length ? only : i === "all" ? this._config.rooms.map((r) => r.climate) : [this._config.rooms[i].climate];
     const anyOn = ids.some((eid) => { const s = this._hass.states[eid]; return s && !["off", "unavailable"].includes(s.state); });
-    return `<div class="scrim" data-act="close"></div><div class="sheet small">
-      <header><div class="sh-title">${icon("mdi:timer-outline")}<div><h2>${i === "all" ? "All rooms timer" : "Timer"}</h2><p>${tmr ? `${tmr.off ? "Everything turns off" : "Turns on"} in ${this._fmtLeft(tmr.left)}` : anyOn ? "Turn every room off after…" : "Turn every room on after…"}</p></div></div>
-      <button class="x" data-act="close">${icon("mdi:close")}</button></header>
-      <div class="tgrid">${TIMER_STEPS.map((m) => `<button class="tbig" data-act="tset" data-i="${i}" data-m="${m}"><b>${m < 60 ? m : m / 60}</b><small>${m < 60 ? "minutes" : m === 60 ? "hour" : "hours"}</small></button>`).join("")}</div>
-      ${tmr ? `<button class="bigbtn off wide" data-act="tcancel" data-i="${i}">${icon("mdi:timer-off-outline")}Cancel timer</button>` : ""}
+    const who = i === "all" ? (only ? `${ids.length} selected room${ids.length === 1 ? "" : "s"}` : "All rooms") : this._config.rooms[i].name;
+    const col = (w, n) => `<div class="wheel" data-w="${w}">${Array.from({ length: n }, (_, k) => `<div class="wi" data-v="${k}">${w === "h" ? String(k).padStart(2, "0") : k}</div>`).join("")}</div>`;
+    const endAt = tmr ? new Date(Date.now() + tmr.left).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", hour12: true }) : "";
+    return `<div class="scrim top" data-act="tclose"></div><div class="sheet small tsheet">
+      <header><div class="sh-title">${icon("mdi:timer-outline")}<div><h2>Timer</h2><p>${$esc(who)}</p></div></div>
+      <button class="x" data-act="tclose">${icon("mdi:close")}</button></header>
+      ${tmr ? `<div class="tleft"><b>${this._fmtLeft(tmr.left)}</b><span>${tmr.off ? "Turns off" : "Turns on"} at ${endAt}</span></div>
+        <button class="bigbtn off wide" data-act="tcancel" data-i="${i}">${icon("mdi:timer-off-outline")}Cancel timer</button>`
+      : `<p class="tq">Turn ${i === "all" ? "the rooms" : "the AC"} ${anyOn ? "off" : "on"} in</p>
+        <div class="wheels"><div class="band"></div>${col("h", 24)}<span class="wl">hour</span>${col("m", 60)}<span class="wl">min.</span></div>
+        <button class="bigbtn on wide" data-act="tstart" data-i="${i}">${icon("mdi:timer-play-outline")}Start timer</button>`}
     </div>`;
   }
+  _bindWheels() {
+    const IH = 56;
+    this._wheel ||= { h: 1, m: 0 };
+    this.shadowRoot.querySelectorAll(".wheel").forEach((w) => {
+      const key = w.dataset.w; const max = key === "h" ? 23 : 59;
+      const mark = (v) => w.querySelectorAll(".wi").forEach((it) => it.classList.toggle("sel", +it.dataset.v === v));
+      w.scrollTop = this._wheel[key] * IH; mark(this._wheel[key]);
+      let t;
+      w.addEventListener("scroll", () => {
+        const v = Math.max(0, Math.min(max, Math.round(w.scrollTop / IH)));
+        mark(v); clearTimeout(t); t = setTimeout(() => { this._wheel[key] = v; this._updStart(); }, 90);
+      }, { passive: true });
+      w.querySelectorAll(".wi").forEach((it) => it.addEventListener("click", () => w.scrollTo({ top: +it.dataset.v * IH, behavior: "smooth" })));
+    });
+    this._updStart();
+  }
+  _updStart() { const b = this.shadowRoot.querySelector('[data-act="tstart"]'); if (b) b.disabled = !(this._wheel.h * 60 + this._wheel.m); }
 
   _bind() {
     this.shadowRoot.querySelectorAll("[data-act]").forEach((el) => el.addEventListener("click", (ev) => {
@@ -540,9 +568,12 @@ class WpClimate extends HTMLElement {
       const selIds = M && M.kind === "all" ? [...M.sel].map((j) => rooms[j].climate) : M && M.kind === "room" ? [rooms[M.idx].climate] : i != null && i !== "all" ? [rooms[i].climate] : [];
       switch (d.act) {
         case "power": { const r = this._room(i); this._power(i, !r.on); break; }
-        case "openroom": this._modal = { kind: "room", idx: i }; this._render(); break;
-        case "openall": { const on = rooms.map((_, j) => j).filter((j) => this._room(j).on); this._modal = { kind: "all", sel: new Set(on.length ? on : rooms.map((_, j) => j)) }; this._render(); break; }
-        case "opentimerall": this._modal = { kind: "timer", idx: "all" }; this._render(); break;
+        case "openroom": this._open({ _modal: { kind: "room", idx: i } }); break;
+        case "openall": { const on = rooms.map((_, j) => j).filter((j) => this._room(j).on); this._open({ _modal: { kind: "all", sel: new Set(on.length ? on : rooms.map((_, j) => j)) } }); break; }
+        case "opentimerall": this._wheel = { h: 1, m: 0 }; this._open({ _tsheet: { i: "all", only: null } }); break;
+        case "topen": this._wheel = { h: 1, m: 0 }; this._open({ _tsheet: { i, only: M?.kind === "all" ? selIds : null } }); break;
+        case "tclose": this._tsheet = null; this._render(); break;
+        case "tstart": { const mins = this._wheel.h * 60 + this._wheel.m; if (!mins) break; this._startTimer(i, mins, this._tsheet?.only); this._tsheet = null; this._render(); setTimeout(() => this._render(), 600); break; }
         case "close": this._modal = null; this._render(); break;
         case "sel": M.sel.has(i) ? M.sel.delete(i) : M.sel.add(i); this._render(); break;
         case "allon": rooms.forEach((_, j) => !this._room(j).on && this._power(j, true)); break;
@@ -574,8 +605,7 @@ class WpClimate extends HTMLElement {
         case "hvane": case "allhvane": this._sem(selIds, "set_swing_horizontal_mode", "swing_horizontal_modes", HVANE_SEM, k, "swing_horizontal_mode"); break;
         case "preset": this._call("select", "select_option", { entity_id: rooms[M.idx].preset, option: k }); break;
         case "extra": this._call("switch", "toggle", { entity_id: d.e }); break;
-        case "tset": this._startTimer(i, +d.m, M?.kind === "all" ? selIds : null); if (M?.kind === "timer") { this._modal = null; } setTimeout(() => this._render(), 400); break;
-        case "tcancel": this._cancelTimer(i); break;
+        case "tcancel": this._cancelTimer(i); this._tsheet = null; this._render(); setTimeout(() => this._render(), 600); break;
         case "schedules": this._modal = null; this._render(); if (this._config.schedules_popup) navigate(`${location.pathname}${this._config.schedules_popup}`); break;
       }
     }));
@@ -600,7 +630,7 @@ const WP_CLIMATE_CSS = `
   .big { display:flex; flex-direction:column; }
   .bt { font-size: 84px; font-weight: 300; line-height: 1; letter-spacing: -3px; } .bt i { font-style: normal; font-size: 48px; vertical-align: top; color: var(--wp-muted); }
   .bl { color: var(--wp-muted); font-size: 17px; margin-top: 4px; }
-  .stats { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stats { display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stats > div { background: var(--wp-card-2); border: 1px solid var(--wp-border); border-radius: 16px; padding: 12px; display:flex; flex-direction:column; gap: 2px; }
   .stats ha-icon { color: var(--wp-muted); --mdc-icon-size: 20px; }
   .stats b { font-size: 21px; } .stats small { color: var(--wp-muted); font-size: 14px; }
@@ -643,10 +673,10 @@ const WP_CLIMATE_CSS = `
   .sp { text-align:center; } .sp b { display:block; font-size: 34px; font-weight: 700; } .sp small { color: var(--wp-muted); font-size: 14px; }
   .more { all: unset; cursor:pointer; color: var(--wp-muted); font-size: 17px; display:flex; align-items:center; gap: 4px; padding: 14px 0; }
   /* modal */
-  .scrim { position: fixed; inset: 0; background: rgba(3, 8, 20, .55); backdrop-filter: blur(6px); z-index: 20; animation: fade .2s; }
-  .sheet { position: fixed; z-index: 21; inset: 3vh 3vw; background: var(--wp-card); border: 1px solid var(--wp-border); border-radius: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.45); display:flex; flex-direction:column; overflow:hidden; animation: pop .22s cubic-bezier(.2,.9,.3,1.2); }
+  .scrim { position: fixed; inset: 0; background: rgba(3, 8, 20, .55); backdrop-filter: blur(6px); z-index: 20; } .scrim.anim { animation: fade .2s; } .scrim.top { z-index: 30; }
+  .sheet { position: fixed; z-index: 21; inset: 3vh 3vw; background: var(--wp-card); border: 1px solid var(--wp-border); border-radius: 28px; box-shadow: 0 30px 80px rgba(0,0,0,.45); display:flex; flex-direction:column; overflow:hidden; } .sheet.anim { animation: pop .22s cubic-bezier(.2,.9,.3,1.2); }
   :host(:not([dark])) .sheet { background: #fff; }
-  .sheet.small { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(720px, 90vw); padding-bottom: 24px; animation: fade .2s; }
+  .sheet.small { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(720px, 90vw); padding-bottom: 24px; } .sheet.small.anim { animation: fade .2s; } .sheet.tsheet { z-index: 31; width: min(560px, 90vw); }
   @keyframes pop { from { transform: scale(.96); opacity: 0; } } @keyframes fade { from { opacity: 0; } }
   header { display:flex; justify-content:space-between; align-items:center; padding: 20px 24px; border-bottom: 1px solid var(--wp-border); }
   .sh-title { display:flex; align-items:center; gap: 14px; } .sh-title > ha-icon { --mdc-icon-size: 34px; color: var(--mc, var(--wp-accent)); }
@@ -668,7 +698,17 @@ const WP_CLIMATE_CSS = `
   .powerbtn { border: 1px solid var(--wp-border); cursor:pointer; width: 100%; max-width: 380px; height: 68px; border-radius: 20px; font-size: 21px; font-weight: 700; display:flex; align-items:center; justify-content:center; gap: 10px; background: var(--wp-accent); color: #fff; box-shadow: var(--wp-glow); }
   .powerbtn.is-on { background: var(--wp-card-2); color: var(--wp-bad); box-shadow: none; } .powerbtn ha-icon { --mdc-icon-size: 28px; }
   .timerline { display:flex; align-items:center; gap: 8px; flex-wrap: wrap; justify-content:center; color: var(--wp-muted); font-size: 17px; }
-  .timerline b { color: var(--wp-warn); } .tbtn { cursor:pointer; border: 1px solid var(--wp-border); background: var(--wp-card-2); border-radius: 12px; padding: 10px 14px; font-size: 17px; font-weight: 700; min-width: 56px; }
+  .timerline b { color: var(--wp-warn); } .tbtn { cursor:pointer; display:flex; align-items:center; gap: 8px; border: 1px solid var(--wp-border); background: var(--wp-card-2); border-radius: 14px; padding: 12px 20px; font-size: 18px; font-weight: 700; }
+  .tq { text-align:center; color: var(--wp-muted); font-size: 22px; margin: 22px 0 6px; }
+  .wheels { position: relative; display:flex; justify-content:center; align-items:center; gap: 6px; height: 280px; margin: 0 24px; }
+  .wheels .band { position:absolute; left: 0; right: 0; top: 112px; height: 56px; border-radius: 14px; background: var(--wp-card-hi); }
+  .wheel { position: relative; width: 96px; height: 280px; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; padding: 112px 0; box-sizing: border-box; -webkit-mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent); mask-image: linear-gradient(transparent, #000 35%, #000 65%, transparent); }
+  .wheel::-webkit-scrollbar { display: none; }
+  .wi { height: 56px; line-height: 56px; text-align: center; font-size: 26px; color: var(--wp-muted); scroll-snap-align: center; cursor: pointer; font-variant-numeric: tabular-nums; }
+  .wi.sel { color: var(--wp-text); font-size: 34px; font-weight: 700; }
+  .wl { position: relative; font-size: 18px; font-weight: 600; width: 52px; }
+  .tleft { text-align:center; padding: 26px 24px 4px; } .tleft b { display:block; font-size: 56px; color: var(--wp-warn); } .tleft span { color: var(--wp-muted); font-size: 18px; }
+  .bigbtn[disabled] { opacity: .4; }
   .link { all: unset; cursor:pointer; color: var(--wp-accent); font-weight: 700; padding: 8px 10px; }
   .right { padding: 20px 24px 24px; overflow-y: auto; display:flex; flex-direction:column; gap: 20px; }
   .grp h4 { margin: 0 0 10px; font-size: 15px; text-transform: uppercase; letter-spacing: .8px; color: var(--wp-muted); font-weight: 700; }
@@ -698,6 +738,7 @@ window.customCards.push(
 );
 console.info(`%c WALL-PANEL %c ${WP_VERSION} `, "background:#2563eb;color:#fff;border-radius:3px 0 0 3px;padding:2px 4px", "background:#0f172a;color:#fff;border-radius:0 3px 3px 0;padding:2px 4px");
 
+
 /* =====================================================================
  * Overview cards: wp-power-flow, wp-side (climate · people · TV), wp-car
  * ===================================================================== */
@@ -720,6 +761,7 @@ class WpBase extends HTMLElement {
   }
   _signature() { const h = this._hass; return (this._ids() || []).filter(Boolean).map((id) => { const s = h.states[id]; return s ? s.state + s.last_updated : "x"; }).join("|") + (this._extraSig?.() || ""); }
   _ids() { return []; }
+  _setHtml(html) { if (html === this._lastHtml) return false; this._lastHtml = html; this.shadowRoot.innerHTML = html; return true; }
   _go(path) { if (!path) return; navigate(path.startsWith("#") ? `${location.pathname}${path}` : path); }
   _call(d, s, data) { return this._hass.callService(d, s, data); }
 }
@@ -762,54 +804,77 @@ class WpPowerFlow extends WpBase {
     const p = Math.round(((t - y) / y) * 100);
     return `<span class="vs ${p > 0 ? "up" : "down"}">${icon(p > 0 ? "mdi:arrow-up" : "mdi:arrow-down")}${Math.abs(p)}%<small>vs yesterday</small></span>`;
   }
+  _geom() {
+    const c = this._config;
+    if (c.image) {
+      const ar = c.image.aspect || 16 / 9; const H = 1000 / ar;
+      const P = (k, d) => { const q = (c.nodes || {})[k] || d; return [q[0] * 10, (q[1] * H) / 100]; };
+      const home = P("home", [52, 72]);
+      const f = (n) => n.toFixed(0);
+      const drop = (a, b) => `M${f(a[0])},${f(a[1])} Q${f(a[0])},${f(b[1])} ${f(b[0])},${f(b[1])}`; // down then across
+      const arc = (a, b) => `M${f(a[0])},${f(a[1])} Q${f((a[0] + b[0]) / 2)},${f(Math.max(a[1], b[1]) + 0.06 * H)} ${f(b[0])},${f(b[1])}`;
+      return {
+        photo: true, ratio: ar, vb: `0 0 1000 ${f(H)}`, home,
+        paths: { solar: drop(P("solar", [60, 30]), home), grid: arc(P("grid", [92, 50]), home), ev: arc(home, P("ev", [22, 78])), ...(c.paths || {}) },
+      };
+    }
+    return { photo: false, ratio: 1000 / 390, vb: "0 30 1000 390", home: [510, 330],
+      paths: { solar: "M560,150 C560,215 540,262 515,300", grid: "M868,225 C830,300 650,330 552,328", ev: "M468,330 C380,338 300,338 236,330" } };
+  }
   _render() {
-    const h = this._hass, c = this._config, st = this._stats;
+    const h = this._hass, c = this._config, st = this._stats, r = this.shadowRoot;
+    const dark = this.hasAttribute("dark");
+    const night = h.states["sun.sun"]?.state === "below_horizon";
+    const G = this._geom();
+    const skelKey = `${G.photo}|${dark}|${night}|${G.vb}`;
+    if (this._skelKey !== skelKey) {
+      this._skelKey = skelKey; this._parts = {};
+      const img = G.photo ? (dark ? c.image.dark || c.image.light : c.image.light || c.image.dark) : null;
+      const lp = (k, d) => { const q = (c.labels || {})[k] || d; return `left:${q[0]}%;top:${q[1]}%`; };
+      r.innerHTML = `<style>${WP_PALETTE}${WP_FLOW_CSS}</style>
+      <section class="card">
+        <header><div class="ttl">${icon("mdi:home-lightning-bolt-outline")}<div><h2>Live Power Flow</h2><p id="sub"></p></div></div><div class="chips" id="chips"></div></header>
+        <div class="scene" data-go="${c.tap || ""}"><div class="stage ${G.photo ? "photo" : ""}">
+          ${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">` : WP_HOUSE_SVG(night)}
+          <svg class="flows" viewBox="${G.vb}" preserveAspectRatio="none"><g id="fl"></g>
+            <circle cx="${G.home[0]}" cy="${G.home[1]}" r="34" class="hub"/><foreignObject x="${G.home[0] - 24}" y="${G.home[1] - 24}" width="48" height="48"><div class="hubi">${icon("mdi:home")}</div></foreignObject></svg>
+          <div class="lbl" id="l-solar" style="${G.photo ? lp("solar", [62, 4]) : ""}"></div><div class="lbl" id="l-grid" style="${G.photo ? lp("grid", [80, 22]) : ""}"></div>
+          <div class="lbl" id="l-home" style="${G.photo ? lp("home", [56, 80]) : ""}"></div><div class="lbl" id="l-ev" style="${G.photo ? lp("ev", [3, 50]) : ""}"></div>
+        </div></div>
+        <div class="tiles" id="tiles"></div>
+      </section>`;
+      r.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
+      const sc = r.querySelector(".scene"), stg = r.querySelector(".stage");
+      const fit = () => { const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return; const sw = Math.min(w, hh * G.ratio); stg.style.width = `${sw}px`; stg.style.height = `${sw / G.ratio}px`; };
+      this._ro?.disconnect(); this._ro = new ResizeObserver(fit); this._ro.observe(sc); fit();
+    }
+    const set = (id, html) => { if (this._parts[id] !== html) { this._parts[id] = html; r.getElementById(id).innerHTML = html; } };
     const solar = Math.max(0, stateNum(h, c.solar) ?? 0), imp = Math.max(0, stateNum(h, c.grid_import) ?? 0), exp = Math.max(0, stateNum(h, c.grid_export) ?? 0);
     const home = stateNum(h, c.home) ?? Math.max(0, solar + imp - exp), ev = Math.max(0, stateNum(h, c.ev) ?? 0);
-    const night = h.states["sun.sun"]?.state === "below_horizon";
     const gridW = imp > 20 ? imp : exp > 20 ? -exp : 0;
-    const stateTxt = [solar > 50 ? "Generating" : null, "Powering home", ev > 50 ? "Charging car" : null, exp > 20 ? "Exporting" : imp > 20 ? "Importing" : null].filter(Boolean).join("  →  ");
+    set("sub", [solar > 50 ? "Generating" : null, "Powering home", ev > 50 ? "Charging car" : null, exp > 20 ? "Exporting" : imp > 20 ? "Importing" : null].filter(Boolean).join("  →  "));
+    set("chips", `<span class="chip ${gridW > 0 ? "warn" : "ok"}"><i></i>${gridW > 0 ? "Using grid" : gridW < 0 ? "Exporting" : "Self-powered"}</span><span class="chip ok live"><i></i>Live</span>`);
+    // flows: only rebuilt when direction or speed band changes, so the animation doesn't restart on every sensor update
+    const band = (w) => (w > 20 ? Math.max(0.9, Math.min(6, 4.5 / Math.sqrt(Math.max(w, 30) / 1000))).toFixed(1) : "0");
+    const flow = (path, w, color, reverse) => { const d = band(w); return d === "0" ? `<path d="${path}" class="fl idle"/>` : `<path d="${path}" class="fl" style="stroke:${color}"/>${[0, 1, 2].map((k) => `<circle r="6" fill="${color}" class="dot"><animateMotion dur="${d}s" begin="-${((k * d) / 3).toFixed(2)}s" repeatCount="indefinite" path="${path}" ${reverse ? 'keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ""}/></circle>`).join("")}`; };
+    set("fl", flow(G.paths.solar, solar, "#fbbf24") + flow(G.paths.grid, Math.abs(gridW), gridW >= 0 ? "#a78bfa" : "#22c55e", gridW < 0) + flow(G.paths.ev, ev, "#22d3ee"));
+    set("l-solar", `<small>Solar</small><b>${kW(solar)} <i>kW</i></b><em class="${solar > 50 ? "y" : ""}">${solar > 50 ? "Generating" : night ? "Night" : "Inactive"}</em>`);
+    set("l-grid", `<small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em>`);
+    set("l-home", `<small>Home use</small><b>${kW(home)} <i>kW</i></b>`);
+    set("l-ev", `<small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em>`);
     const sx = c.stats || {};
     const genT = stateNum(h, sx.generation), impT = stateNum(h, sx.import), expT = stateNum(h, sx.export);
     const homeT = genT != null && impT != null && expT != null ? Math.max(0, genT + impT - expT) : null;
     const costT = st?.c ? st.c.t.reduce((a, v) => a + v, 0) : null;
     const rate = sx.export_rate ?? 0.05;
-    const dur = (w) => Math.max(0.9, Math.min(6, 4.5 / Math.sqrt(Math.max(w, 30) / 1000))).toFixed(2);
-    const flow = (id, path, w, color, reverse) => w > 20 ? `<path d="${path}" class="fl" style="stroke:${color}"/>${[0, 1, 2].map((k) => `<circle r="6" fill="${color}" class="dot"><animateMotion dur="${dur(w)}s" begin="-${(k * dur(w) / 3).toFixed(2)}s" repeatCount="indefinite" path="${path}" ${reverse ? 'keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ""}/></circle>`).join("")}` : `<path d="${path}" class="fl idle"/>`;
-    const P = { solar: "M560,150 C560,215 540,262 515,300", grid: "M868,225 C830,300 650,330 552,328", ev: "M468,330 C380,338 300,338 236,330" };
-    this.shadowRoot.innerHTML = `<style>${WP_PALETTE}${WP_FLOW_CSS}</style>
-    <section class="card ${night ? "night" : "day"}">
-      <header>
-        <div class="ttl">${icon("mdi:home-lightning-bolt-outline")}<div><h2>Live Power Flow</h2><p>${stateTxt}</p></div></div>
-        <div class="chips"><span class="chip ${gridW > 0 ? "warn" : "ok"}"><i></i>${gridW > 0 ? "Using grid" : gridW < 0 ? "Exporting" : "Self-powered"}</span><span class="chip ok live"><i></i>Live</span></div>
-      </header>
-      <div class="scene" data-go="${c.tap || ""}"><div class="stage">
-        ${WP_HOUSE_SVG(night, home)}
-        <svg class="flows" viewBox="0 30 1000 390" preserveAspectRatio="none">
-          ${flow("solar", P.solar, solar, "#fbbf24")}
-          ${flow("grid", P.grid, Math.abs(gridW), gridW >= 0 ? "#a78bfa" : "#22c55e", gridW < 0)}
-          ${flow("ev", P.ev, ev, "#22d3ee")}
-          <circle cx="510" cy="330" r="34" class="hub"/><foreignObject x="486" y="306" width="48" height="48"><div class="hubi">${icon("mdi:home")}</div></foreignObject>
-        </svg>
-        <div class="lbl l-solar"><small>Solar</small><b>${kW(solar)} <i>kW</i></b><em class="${solar > 50 ? "y" : ""}">${solar > 50 ? "Generating" : night ? "Night" : "Inactive"}</em></div>
-        <div class="lbl l-grid"><small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em></div>
-        <div class="lbl l-home"><small>Home use</small><b>${kW(home)} <i>kW</i></b></div>
-        <div class="lbl l-ev"><small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em></div>
-      </div></div>
-      <div class="tiles">
+    set("tiles", `
         <div class="tile">${icon("mdi:white-balance-sunny", "ti y")}<div><small>Solar today</small><b>${kWh(genT)}<i> kWh</i></b>${st?.yearSolar != null ? `<p>${new Date().getFullYear()}: <strong>${kWh(st.yearSolar)}</strong> kWh</p>` : ""}${st ? this._bars(st.g.t, "#fbbf24") : ""}</div></div>
         <div class="tile">${icon("mdi:home-outline", "ti b")}<div><small>Home today</small><b>${kWh(homeT)}<i> kWh</i></b>${st ? this._vsY(st.home) : ""}${st ? this._bars(st.home.t, "#38bdf8") : ""}</div></div>
         <div class="tile">${icon("mdi:transmission-tower-export", "ti g")}<div><small>Exported today</small><b>${kWh(expT)}<i> kWh</i></b><p class="money g">+${aud((expT || 0) * rate)} earned</p>${st ? this._bars(st.e.t, "#22c55e") : ""}</div></div>
-        <div class="tile">${icon("mdi:transmission-tower-import", "ti p")}<div><small>Imported today</small><b>${kWh(impT)}<i> kWh</i></b><p class="money">${costT != null ? `${aud(costT)} cost` : ""}</p>${st ? this._bars(st.i.t, "#a78bfa") : ""}</div></div>
-      </div>
-    </section>`;
-    this.shadowRoot.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
-    const sc = this.shadowRoot.querySelector(".scene"), stg = this.shadowRoot.querySelector(".stage");
-    const fit = () => { const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return; const r = 1000 / 390; const sw = Math.min(w, hh * r); stg.style.width = `${sw}px`; stg.style.height = `${sw / r}px`; };
-    this._ro?.disconnect(); this._ro = new ResizeObserver(fit); this._ro.observe(sc); fit();
+        <div class="tile">${icon("mdi:transmission-tower-import", "ti p")}<div><small>Imported today</small><b>${kWh(impT)}<i> kWh</i></b><p class="money">${costT != null ? `${aud(costT)} cost` : ""}</p>${st ? this._bars(st.i.t, "#a78bfa") : ""}</div></div>`);
   }
 }
-function WP_HOUSE_SVG(night, homeW) {
+function WP_HOUSE_SVG(night) {
   const lit = night ? "var(--h-lit)" : "var(--h-glass)";
   return `<svg class="house" viewBox="0 30 1000 390" preserveAspectRatio="none">
     <defs><linearGradient id="gnd" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--h-ground)"/><stop offset="1" stop-color="var(--h-ground)" stop-opacity="0"/></linearGradient>
@@ -856,16 +921,19 @@ const WP_FLOW_CSS = `
   .chips { display:flex; gap: 8px; } .chip { display:flex; align-items:center; gap: 7px; padding: 6px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; border: 1px solid var(--wp-border); background: var(--wp-card-2); }
   .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--wp-ok); } .chip.warn i { background: #a78bfa; } .chip.live i { animation: pulse 1.6s infinite; }
   @keyframes pulse { 50% { opacity: .25; } }
-  .scene { position:relative; flex: 1; min-height: 240px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-  .stage { position: relative; } .stage svg { position:absolute; inset:0; width:100%; height:100%; }
-  .fl { fill:none; stroke-width: 5; stroke-linecap: round; opacity: .55; } .fl.idle { stroke: var(--wp-track); opacity: .8; stroke-dasharray: 4 10; }
+  .scene { position:relative; flex: 1 1 0; min-height: 240px; cursor:pointer; }
+  .stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } .stage svg { position:absolute; inset:0; width:100%; height:100%; }
+  .fl { fill:none; stroke-width: 5; stroke-linecap: round; opacity: .55; } .photo .fl { opacity: .8; stroke-width: 6; filter: drop-shadow(0 0 4px rgba(0,0,0,.6)); } .fl.idle { stroke: var(--wp-track); opacity: .8; stroke-dasharray: 4 10; }
   .dot { filter: drop-shadow(0 0 6px currentColor); }
   .hub { fill: var(--wp-card); stroke: var(--wp-accent); stroke-width: 4; filter: drop-shadow(0 0 12px rgba(59,130,246,.6)); }
   .hubi { width:48px; height:48px; display:grid; place-items:center; color: var(--wp-accent); } .hubi ha-icon { --mdc-icon-size: 30px; }
   .lbl { position:absolute; padding: 8px 14px; border-radius: 14px; background: color-mix(in srgb, var(--wp-card) 82%, transparent); border:1px solid var(--wp-border); backdrop-filter: blur(6px); box-shadow: var(--wp-shadow); }
   .lbl small { display:block; color: var(--wp-muted); font-size: 14px; } .lbl b { display:block; font-size: 26px; line-height: 1.15; } .lbl b i { font-style: normal; font-size: 16px; color: var(--wp-muted); }
   .lbl em { display:block; font-style:normal; font-size: 14px; font-weight: 700; color: var(--wp-muted); } .lbl em.y { color: #f59e0b; } .lbl em.p { color: #a78bfa; } .lbl em.g { color: #22c55e; } .lbl em.c { color: #06b6d4; }
-  .l-solar { left: 17.5%; top: 2%; } .l-grid { left: 70%; top: 6%; } .l-home { left: 55.5%; top: 77%; } .l-ev { left: 3%; top: 40%; }
+  .stage:not(.photo) #l-solar { left: 17.5%; top: 2%; } .stage:not(.photo) #l-grid { left: 70%; top: 6%; } .stage:not(.photo) #l-home { left: 55.5%; top: 77%; } .stage:not(.photo) #l-ev { left: 3%; top: 40%; }
+  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; border-radius: 18px;
+    -webkit-mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 62%, transparent 100%); mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 62%, transparent 100%); }
+  .lbl:empty { display:none; }
   .tiles { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .tile { display:flex; gap: 10px; padding: 12px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width: 0; }
   .tile > div { flex:1; min-width:0; } .ti { --mdc-icon-size: 26px; flex:none; } .ti.y { color:#f59e0b; } .ti.b { color:#38bdf8; } .ti.g { color:#22c55e; } .ti.p { color:#a78bfa; }
@@ -888,9 +956,9 @@ class WpSide extends WpBase {
     const h = this._hass, c = this._config;
     const tv = c.tv && h.states[c.tv.media_player];
     const tvOn = tv && TV_ACTIVE.includes(tv.state);
-    this.shadowRoot.innerHTML = `<style>${WP_PALETTE}${WP_SIDE_CSS}</style>
+    if (!this._setHtml(`<style>${WP_PALETTE}${WP_SIDE_CSS}</style>
       <div class="col">${this._climateHtml()}${this._peopleHtml()}${tvOn ? this._tvHtml(tv) : ""}</div>
-      ${this._tvModal && tvOn ? this._remoteHtml(tv) : ""}`;
+      ${this._tvModal && tvOn ? this._remoteHtml(tv) : ""}`)) return;
     this._bind();
   }
   _climateHtml() {
@@ -907,7 +975,8 @@ class WpSide extends WpBase {
     const hw = c.hot_water || {};
     const hwT = num(h.states[hw.temperature]?.state), hwMode = h.states[hw.mode]?.state, hwOn = h.states[hw.switch]?.state === "on", hwP = num(h.states[hw.power]?.state);
     return `<section class="card clim" data-go="${c.climate_path || ""}">
-      <header><div class="ttl">${icon("mdi:thermostat")}<h2>Climate</h2></div>${icon("mdi:chevron-right", "chev")}</header>
+      <header><div class="ttl">${icon("mdi:thermometer")}<h2>${$esc(c.climate_title || "Climate & Heat Pumps")}</h2></div>${icon("mdi:chevron-right", "chev")}</header>
+      ${c.heat_pump_image ? `<div class="hp"><img src="${$esc(c.heat_pump_image)}" alt=""></div>` : ""}
       <div class="cl-top">
         <div class="ct"><div class="mini">${icon("mdi:home-thermometer-outline")}House</div><b>${fmt1(avg)}<i>°C</i></b><small>${sum}</small></div>
         ${c.hot_water ? `<div class="ct hw ${hwOn ? "run" : ""}"><div class="mini">${icon("mdi:water-boiler")}Hot water</div><b>${hwT == null ? "–" : Math.round(hwT)}<i>°C</i></b><small>${hwOn ? `Heating${hwP > 20 ? ` · ${(hwP / 1000).toFixed(1)} kW` : ""}` : "Idle"}${hwMode ? ` · ${$esc(hwMode)}` : ""}</small></div>` : ""}
@@ -985,6 +1054,8 @@ const WP_SIDE_CSS = `
   header { display:flex; justify-content:space-between; align-items:center; } .ttl { display:flex; gap: 10px; align-items:center; } .ttl > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); }
   h2 { margin:0; font-size: 22px; } .chev { color: var(--wp-muted); }
   .clim { flex: 1; min-height: 0; padding: 16px 18px; display:flex; flex-direction:column; gap: 12px; cursor:pointer; }
+  .hp { height: 120px; flex: none; border-radius: 16px; overflow: hidden; background: var(--wp-card-2); display:flex; align-items:center; justify-content:center; }
+  .hp img { height: 100%; width: 100%; object-fit: cover; }
   .cl-top { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .ct { background: var(--wp-card-2); border:1px solid var(--wp-border); border-radius: 16px; padding: 12px 14px; }
   .mini { display:flex; align-items:center; gap: 6px; color: var(--wp-muted); font-size: 15px; } .mini ha-icon { --mdc-icon-size: 20px; color: var(--wp-heat); }
@@ -1031,17 +1102,16 @@ class WpCar extends WpBase {
     const pw = stateNum(h, c.charger_power); const loc = h.states[c.location]?.state; const locked = h.states[c.lock]?.state === "locked";
     const col = b == null ? "var(--wp-faint)" : b < 20 ? "var(--wp-bad)" : b < 40 ? "var(--wp-warn)" : "var(--wp-ok)";
     const status = charging ? `Charging${pw ? ` · ${pw.toFixed(1)} kW` : ""}` : plugged ? "Plugged in" : "Not plugged in";
-    this.shadowRoot.innerHTML = `<style>${WP_PALETTE}${WP_CAR_CSS}</style>
+    this._setHtml(`<style>${WP_PALETTE}${WP_CAR_CSS}</style>
       <section class="card" data-go="${c.tap || ""}">
         <div class="hd">${icon("mdi:car-electric")}<div><h2>${$esc(c.name || "Car")}</h2><small>${$esc(loc === "home" ? "Home" : loc === "not_home" ? "Away" : loc || "")}${c.lock ? ` · ${locked ? "Locked" : "Unlocked"}` : ""}</small></div></div>
-        <svg class="car" viewBox="0 0 200 66">${WP_CAR_PATH}</svg>
+        ${c.image ? `<img class="carimg" src="${$esc(c.image)}" alt="">` : `<svg class="car" viewBox="0 0 200 66">${WP_CAR_PATH}</svg>`}
         <div class="bat"><b>${b == null ? "–" : Math.round(b)}<i>%</i></b>
           <div class="bar"><span style="width:${b ?? 0}%;background:${col}"></span>${lim ? `<em style="left:${lim}%"></em>` : ""}</div>
           <small>${rng == null ? "" : `${Math.round(rng)} km range`}${lim ? ` · limit ${Math.round(lim)}%` : ""}</small></div>
         <span class="st ${charging ? "chg" : plugged ? "plug" : ""}">${icon(charging ? "mdi:lightning-bolt" : plugged ? "mdi:power-plug" : "mdi:power-plug-off-outline")}${status}</span>
         ${icon("mdi:chevron-right", "chev")}
-      </section>`;
-    this.shadowRoot.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
+      </section>`) && this.shadowRoot.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
   }
 }
 const WP_CAR_PATH = `<path d="M6,46 C6,36 16,32 34,30 L64,16 C74,10 92,8 116,8 C136,8 150,12 162,22 L178,30 C190,32 196,38 196,46 L196,52 L6,52 Z" fill="var(--c-body)"/><path d="M70,18 C78,13 92,12 112,12 L114,28 L58,29 Z M120,12 C136,12 146,15 156,24 L120,28 Z" fill="var(--c-glass)"/><circle cx="48" cy="52" r="13" fill="var(--c-tyre)"/><circle cx="48" cy="52" r="6" fill="var(--c-rim)"/><circle cx="158" cy="52" r="13" fill="var(--c-tyre)"/><circle cx="158" cy="52" r="6" fill="var(--c-rim)"/>`;
@@ -1051,6 +1121,7 @@ const WP_CAR_CSS = `
   .card { display:flex; align-items:center; gap: 22px; padding: 14px 20px; background: var(--wp-card); border:1px solid var(--wp-border); border-radius: var(--wp-radius); box-shadow: var(--wp-shadow); cursor:pointer; }
   .hd { display:flex; gap: 12px; align-items:center; min-width: 170px; white-space: nowrap; } .hd > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); } h2 { margin:0; font-size: 21px; } .hd small { color: var(--wp-muted); font-size: 15px; }
   .car { width: 170px; height: 56px; flex:none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.3)); }
+  .carimg { height: 62px; width: auto; max-width: 200px; flex: none; object-fit: contain; margin: -6px 0; filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
   .bat { flex:1; min-width: 260px; display:grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 16px; align-items:center; }
   .bat b { grid-row: span 2; font-size: 42px; font-weight: 600; } .bat b i { font-style:normal; font-size: 20px; color: var(--wp-muted); }
   .bar { position:relative; height: 12px; border-radius: 999px; background: var(--wp-track); } .bar span { position:absolute; left:0; top:0; bottom:0; border-radius: 999px; } .bar em { position:absolute; top:-4px; bottom:-4px; width: 2px; background: var(--wp-muted); }

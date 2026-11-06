@@ -15,3 +15,13 @@ Add this repository to Home Assistant's Marketplace (HACS) as a custom **Dashboa
 
 ## Light / dark
 Set `theme` (`auto` | `light` | `dark`) or `theme_entity` (an `input_select` with Auto/Light/Dark) on `wp-page`; child `wp-*` cards inherit it.
+
+## Photos (optional)
+Images are not shipped in this repo; put your own under `/config/www/...` and reference them as `/local/...`.
+
+- `wp-power-flow`: `image: {light: /local/..., dark: /local/..., aspect: 1.777}`. Optional `nodes` (`solar`, `grid`, `home`, `ev` as `[x%, y%]` on the photo) and `labels` (same keys, label box position) place the flow lines. Without `image` the built-in illustration is used.
+- `wp-car`: `image: /local/...` (transparent PNG, side profile).
+- `wp-side`: `heat_pump_image: /local/...` shows a banner in the climate section; `climate_title` overrides "Climate & Heat Pumps".
+
+## Build
+`python3 tools/build.py` concatenates `src/*.js` into `dist/wall-panel-cards.js`.
