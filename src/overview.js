@@ -314,8 +314,8 @@ const WP_SIDE_CSS = `
   header { display:flex; justify-content:space-between; align-items:center; } .ttl { display:flex; gap: 10px; align-items:center; } .ttl > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); }
   h2 { margin:0; font-size: 22px; } .chev { color: var(--wp-muted); }
   .clim { flex: 1; min-height: 0; padding: 16px 18px; display:flex; flex-direction:column; gap: 12px; cursor:pointer; }
-  .hp { height: 120px; flex: none; border-radius: 16px; overflow: hidden; background: var(--wp-card-2); display:flex; align-items:center; justify-content:center; }
-  .hp img { height: 100%; width: 100%; object-fit: cover; }
+  .hp { height: 112px; flex: none; display:flex; align-items:center; justify-content:center; }
+  .hp img { height: 100%; width: 100%; object-fit: contain; filter: drop-shadow(0 10px 14px rgba(0,0,0,.35)); }
   .cl-top { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .ct { background: var(--wp-card-2); border:1px solid var(--wp-border); border-radius: 16px; padding: 12px 14px; }
   .mini { display:flex; align-items:center; gap: 6px; color: var(--wp-muted); font-size: 15px; } .mini ha-icon { --mdc-icon-size: 20px; color: var(--wp-heat); }
