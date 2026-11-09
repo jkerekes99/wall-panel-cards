@@ -19,6 +19,8 @@ Set `theme` (`auto` | `light` | `dark`) or `theme_entity` (an `input_select` wit
 ## Theme
 `theme_entity` (an input_select) or `theme:` picks `Auto` (HA/device dark mode), `Light`, `Dark` or `Sun` (dark while `sun.sun` is below the horizon; add `sun_elevation: -4` to switch at that solar elevation instead).
 
+Tapping the clock flips light/dark on that device until the automatic choice next changes (e.g. the next sunrise or sunset in Sun mode); tap again to go back to automatic.
+
 ## Weather dialog (wp-page)
 `weather_popup: dialog` opens a built-in forecast dialog (current conditions, next 24 hours, 7 days) sized to its content; `weather_hourly:` names a separate hourly weather entity if the main one only has daily forecasts. Any other `weather_popup` value is navigated to as a hash (e.g. a Bubble pop-up).
 

@@ -30,7 +30,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.4";
+const WP_VERSION = "0.5.5";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -41,7 +41,26 @@ function navigate(path, replace = false) {
   if (replace) history.replaceState(null, "", path); else history.pushState(null, "", path);
   window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace } }));
 }
+/* Manual light/dark flip (tap the clock). It holds only until the automatic choice next changes (sunrise/sunset in Sun mode),
+ * then the automatic choice takes over again. Kept per device in localStorage so a page reload keeps it. */
+const WP_OV_KEY = "wall-panel-theme-override";
+let wpThemeOv;
+try { wpThemeOv = JSON.parse(localStorage.getItem(WP_OV_KEY) || "null"); } catch (e) { wpThemeOv = null; }
+function wpSetOv(v) { wpThemeOv = v; try { v ? localStorage.setItem(WP_OV_KEY, JSON.stringify(v)) : localStorage.removeItem(WP_OV_KEY); } catch (e) { /* storage unavailable */ } }
 function wpIsDark(hass, cfg) {
+  const base = wpAutoDark(hass, cfg);
+  const ov = wpThemeOv;
+  if (ov && (ov.base !== base || (ov.until && Date.now() > ov.until))) { wpSetOv(null); return base; }
+  return ov ? ov.dark : base;
+}
+function wpToggleTheme(hass, cfg) {
+  const base = wpAutoDark(hass, cfg), cur = wpIsDark(hass, cfg);
+  if (wpThemeOv) { wpSetOv(null); return; }                 // second tap goes back to automatic
+  const sun = hass?.states["sun.sun"]?.attributes || {};
+  const next = [sun.next_rising, sun.next_setting].map((t) => (t ? Date.parse(t) : NaN)).filter((t) => t > Date.now());
+  wpSetOv({ dark: !cur, base, until: next.length ? Math.min(...next) + 60e3 : Date.now() + 12 * 3600e3 });
+}
+function wpAutoDark(hass, cfg) {
   const ent = cfg.theme_entity && hass?.states[cfg.theme_entity];
   const mode = (ent ? ent.state : cfg.theme || "auto").toLowerCase();
   if (mode === "dark") return true;
@@ -156,7 +175,7 @@ class WpPage extends HTMLElement {
           ${c.chips?.length ? `<div class="chips" id="chips"></div>` : ""}
           <div class="right">
             <button class="wx" id="wx">${icon("mdi:weather-partly-cloudy", "wxi")}<div><b id="wxt">–</b><small id="wxc"></small></div></button>
-            <div class="clock"><b id="time">–</b><small id="date"></small></div>
+            <button class="clock" id="clock" aria-label="Switch light or dark"><b id="time">–</b><small id="date"></small></button>
           </div>
         </nav>
         <div id="layer"></div><div id="wxlayer"></div>
@@ -171,6 +190,10 @@ class WpPage extends HTMLElement {
       this._chipOpen = +b.dataset.chip; this._chipAnim = Date.now() + 450; this._renderLayer();
     });
     root.getElementById("layer").addEventListener("click", (e) => this._layerClick(e));
+    root.getElementById("clock").addEventListener("click", () => {
+      wpToggleTheme(this._hass, this._config);
+      this.hass = this._hass;                              // re-apply to this page and every child card now
+    });
     root.getElementById("wx").addEventListener("click", () => {
       if (c.weather_popup === "dialog") { this._wxOpen = true; this._wxAnim = Date.now() + 450; this._wxSubscribe(); this._renderWx(); }
       else if (c.weather_popup) navigate(`${location.pathname}${c.weather_popup}`);
@@ -351,7 +374,8 @@ const WP_PAGE_CSS = `
     box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 1px rgba(96,165,250,.55), 0 6px 18px rgba(37,99,235,.45), 0 0 28px rgba(59,130,246,.35); }
   .right { display:flex; align-items:center; gap: 10px; padding-left: 10px; border-left: 1px solid var(--wp-border); }
   .wx { all: unset; cursor:pointer; display:flex; align-items:center; gap: 10px; padding: 6px 12px; border-radius: 14px; }
-  .wx:active { background: var(--wp-card-hi); }
+  .wx:active, .clock:active { background: var(--wp-card-hi); }
+  .clock { all: unset; cursor: pointer; padding: 6px 10px; border-radius: 14px; text-align: right; }
   .wx ha-icon { --mdc-icon-size: 34px; color: #fbbf24; }
   .wx b, .clock b { display:block; font-size: 20px; line-height: 1.1; }
   .wx small, .clock small { display:block; color: var(--wp-muted); font-size: 13px; }
@@ -978,7 +1002,7 @@ class WpBase extends HTMLElement {
     if (first || sig !== this._sig) { this._sig = sig; this._render(); }
     if (first) this._firstHass?.();
   }
-  _signature() { const h = this._hass; return (this._ids() || []).filter(Boolean).map((id) => { const s = h.states[id]; return s ? s.state + s.last_updated : "x"; }).join("|") + (this._extraSig?.() || ""); }
+  _signature() { const h = this._hass; return (this._ids() || []).filter(Boolean).map((id) => { const s = h.states[id]; return s ? s.state + s.last_updated : "x"; }).join("|") + (this._extraSig?.() || "") + (this.hasAttribute("dark") ? "|D" : "|L"); }
   _ids() { return []; }
   _setHtml(html) { if (html === this._lastHtml) return false; this._lastHtml = html; this.shadowRoot.innerHTML = html; return true; }
   _go(path) { if (!path) return; navigate(path.startsWith("#") ? `${location.pathname}${path}` : path); }

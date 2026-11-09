@@ -19,7 +19,7 @@ class WpBase extends HTMLElement {
     if (first || sig !== this._sig) { this._sig = sig; this._render(); }
     if (first) this._firstHass?.();
   }
-  _signature() { const h = this._hass; return (this._ids() || []).filter(Boolean).map((id) => { const s = h.states[id]; return s ? s.state + s.last_updated : "x"; }).join("|") + (this._extraSig?.() || ""); }
+  _signature() { const h = this._hass; return (this._ids() || []).filter(Boolean).map((id) => { const s = h.states[id]; return s ? s.state + s.last_updated : "x"; }).join("|") + (this._extraSig?.() || "") + (this.hasAttribute("dark") ? "|D" : "|L"); }
   _ids() { return []; }
   _setHtml(html) { if (html === this._lastHtml) return false; this._lastHtml = html; this.shadowRoot.innerHTML = html; return true; }
   _go(path) { if (!path) return; navigate(path.startsWith("#") ? `${location.pathname}${path}` : path); }
