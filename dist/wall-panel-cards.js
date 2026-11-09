@@ -30,7 +30,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.1";
+const WP_VERSION = "0.5.2";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -985,11 +985,12 @@ class WpPowerFlow extends WpBase {
       const lp = (k, d) => { const q = (c.labels || {})[k] || d; return `left:${q[0]}%;top:${q[1]}%`; };
       r.innerHTML = `<style>${WP_PALETTE}${WP_FLOW_CSS}</style>
       <section class="card">
-        <header><div class="ttl">${icon("mdi:home-lightning-bolt-outline")}<div><h2>Live Power Flow</h2><p id="sub"></p></div></div><div class="chips" id="chips"></div></header>
+        <header><div class="ttl">${icon("lu:house", "hico")}<div><h2>Live Power Flow</h2><p id="sub"></p></div></div><div class="chips" id="chips"></div></header>
         <div class="scene ${G.photo ? "photo" : ""}" data-go="${c.tap || ""}">${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">${imgCar ? `<img class="ph car" src="${$esc(imgCar)}" alt="">` : ""}` : ""}<div class="stage ${G.photo ? "photo" : ""}">
           ${G.photo ? "" : WP_HOUSE_SVG(night)}
           <svg class="flows" viewBox="${G.vb}" preserveAspectRatio="none"><g id="fl"></g>
-            <circle cx="${G.home[0]}" cy="${G.home[1]}" r="34" class="hub"/><foreignObject x="${G.home[0] - 24}" y="${G.home[1] - 24}" width="48" height="48"><div class="hubi">${icon("mdi:home")}</div></foreignObject></svg>
+            <defs><radialGradient id="hubg" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="#1d4f91"/><stop offset="1" stop-color="#0b1b38"/></radialGradient></defs>
+            <circle cx="${G.home[0]}" cy="${G.home[1]}" r="40" class="hubhalo"/><circle cx="${G.home[0]}" cy="${G.home[1]}" r="31" class="hub"/><foreignObject x="${G.home[0] - 24}" y="${G.home[1] - 24}" width="48" height="48"><div class="hubi">${icon("lu:house")}</div></foreignObject></svg>
           <div class="lbl" id="l-solar" style="${G.photo ? lp("solar", [62, 4]) : ""}"></div><div class="lbl" id="l-grid" style="${G.photo ? lp("grid", [80, 22]) : ""}"></div>
           <div class="lbl" id="l-home" style="${G.photo ? lp("home", [56, 80]) : ""}"></div><div class="lbl" id="l-ev" style="${G.photo ? lp("ev", [3, 50]) : ""}"></div>
         </div></div>
@@ -1024,10 +1025,10 @@ class WpPowerFlow extends WpBase {
     const band = (w) => (w > 20 ? Math.max(0.9, Math.min(6, 4.5 / Math.sqrt(Math.max(w, 30) / 1000))).toFixed(1) : "0");
     const flow = (path, w, color, reverse) => { const d = band(w); return d === "0" ? `<path d="${path}" class="fl idle"/>` : `<path d="${path}" class="fl" style="stroke:${color}"/>${[0, 1, 2].map((k) => `<circle r="6" fill="${color}" class="dot"><animateMotion dur="${d}s" begin="-${((k * d) / 3).toFixed(2)}s" repeatCount="indefinite" path="${path}" ${reverse ? 'keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ""}/></circle>`).join("")}`; };
     set("fl", flow(G.paths.solar, solar, "#fbbf24") + flow(G.paths.grid, Math.abs(gridW), gridW >= 0 ? "#a78bfa" : "#22c55e", gridW < 0) + (carHere ? flow(G.paths.ev, ev, "#22d3ee") : ""));
-    set("l-solar", `<small>Solar</small><b>${kW(solar)} <i>kW</i></b><em class="${solar > 50 ? "y" : ""}">${solar > 50 ? "Generating" : night ? "Night" : "Inactive"}</em>`);
-    set("l-grid", `<small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em>`);
-    set("l-home", `<small>Home use</small><b>${kW(home)} <i>kW</i></b>`);
-    set("l-ev", carHere ? `<small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em>` : "");
+    set("l-solar", `<span class="lic ${solar > 50 ? "on" : ""}">${WP_SUN_ICON}</span><div class="lbox"><small>Solar</small><b>${kW(solar)} <i>kW</i></b><em class="${solar > 50 ? "y" : ""}">${solar > 50 ? "Generating" : night ? "Night" : "Inactive"}</em></div>`);
+    set("l-grid", `<span class="lic grid ${gridW > 0 ? "imp" : gridW < 0 ? "exp" : ""}">${WP_PYLON_ICON}</span><div class="lbox"><small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em></div>`);
+    set("l-home", `<div class="lbox"><small>Home use</small><b>${kW(home)} <i>kW</i></b></div>`);
+    set("l-ev", carHere ? `<div class="lbox"><small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em></div>` : "");
     this._clampLabels();
     const sx = c.stats || {};
     const genT = stateNum(h, sx.generation), impT = stateNum(h, sx.import), expT = stateNum(h, sx.export);
@@ -1046,6 +1047,11 @@ class WpPowerFlow extends WpBase {
           <div class="tf">${st ? this._bars(st.i.t, "#a78bfa") : ""}${costT != null ? `<span class="side"><b>${aud(costT)}</b><small>cost</small></span>` : ""}</div></div>`);
   }
 }
+const WP_SUN_ICON = `<svg viewBox="0 0 48 48" aria-hidden="true"><defs><radialGradient id="sunc" cx="40%" cy="38%" r="65%"><stop offset="0" stop-color="#fff3b0"/><stop offset=".55" stop-color="#fcd34d"/><stop offset="1" stop-color="#f59e0b"/></radialGradient></defs>
+  <g stroke="#fbbf24" stroke-width="3.2" stroke-linecap="round">${[0, 45, 90, 135, 180, 225, 270, 315].map((a) => `<line x1="24" y1="5" x2="24" y2="10.5" transform="rotate(${a} 24 24)"/>`).join("")}</g>
+  <circle cx="24" cy="24" r="10" fill="url(#sunc)"/></svg>`;
+const WP_PYLON_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M12 2 7.4 22M12 2l4.6 20M4.5 6.5h15M6 10.5h12M8.7 6.5l6.6 4M15.3 6.5l-6.6 4M8.6 14.5h6.8M8.6 14.5l7.1 7.5M15.4 14.5 8.3 22M4.5 6.5 3 8.5M19.5 6.5 21 8.5M6 10.5l-1 1.5M18 10.5l1 1.5"/></svg>`;
 function WP_HOUSE_SVG(night) {
   const lit = night ? "var(--h-lit)" : "var(--h-glass)";
   return `<svg class="house" viewBox="0 30 1000 390" preserveAspectRatio="none">
@@ -1095,18 +1101,27 @@ const WP_FLOW_CSS = `
   @keyframes pulse { 50% { opacity: .25; } }
   .scene { position:relative; flex: 1 1 0; min-height: 240px; cursor:pointer; }
   .scene.photo { overflow: hidden; margin: 0 -20px; }
-  .stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } .stage svg { position:absolute; inset:0; width:100%; height:100%; }
+  .stage { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } .stage > svg { position:absolute; inset:0; width:100%; height:100%; }
   .fl { fill:none; stroke-width: 5; stroke-linecap: round; opacity: .55; } .photo .fl { opacity: .8; stroke-width: 6; filter: drop-shadow(0 0 4px rgba(0,0,0,.6)); } .fl.idle { stroke: var(--wp-track); opacity: .8; stroke-dasharray: 4 10; }
   .dot { filter: drop-shadow(0 0 6px currentColor); }
-  .hub { fill: var(--wp-card); stroke: var(--wp-accent); stroke-width: 4; filter: drop-shadow(0 0 12px rgba(59,130,246,.6)); }
-  .hubi { width:48px; height:48px; display:grid; place-items:center; color: var(--wp-accent); } .hubi ha-icon { --mdc-icon-size: 30px; }
-  .lbl { position:absolute; padding: 8px 14px; border-radius: 14px; background: color-mix(in srgb, var(--wp-card) 82%, transparent); border:1px solid var(--wp-border); backdrop-filter: blur(6px); box-shadow: var(--wp-shadow); }
+  .hub { fill: url(#hubg); stroke: #38bdf8; stroke-width: 3; filter: drop-shadow(0 0 10px rgba(56,189,248,.85)); }
+  .hubhalo { fill: rgba(56,189,248,.16); stroke: rgba(56,189,248,.35); stroke-width: 1.5; }
+  .hubi { width:48px; height:48px; display:grid; place-items:center; color: #9be7ff; } .hubi svg.lu { --mdc-icon-size: 28px; --lu-stroke: 2; filter: drop-shadow(0 0 4px rgba(56,189,248,.8)); }
+  .ttl > svg.hico { --mdc-icon-size: 34px; --lu-stroke: 1.8; color: var(--wp-text); }
+  .lbl { position:absolute; display:flex; align-items:center; gap: 8px; }
+  .lbox { padding: 8px 14px; border-radius: 14px; background: color-mix(in srgb, var(--wp-card) 84%, transparent); border:1px solid var(--wp-border); backdrop-filter: blur(6px); box-shadow: var(--wp-shadow); }
+  .lic { flex: none; width: 52px; height: 52px; display:grid; place-items:center; }
+  .lic svg { width: 100%; height: 100%; overflow: visible; }
+  .lic:not(.grid):not(.on) svg { filter: grayscale(1) opacity(.65); } .lic.on svg { filter: drop-shadow(0 0 10px rgba(251,191,36,.75)); }
+  .lic.grid { color: #a78bfa; } .lic.grid svg { width: 44px; height: 44px; filter: drop-shadow(0 0 7px rgba(167,139,250,.9)); }
+  .lic.grid.exp { color: #4ade80; } .lic.grid.exp svg { filter: drop-shadow(0 0 7px rgba(74,222,128,.85)); }
   .lbl small { display:block; color: var(--wp-muted); font-size: 14px; } .lbl b { display:block; font-size: 26px; line-height: 1.15; } .lbl b i { font-style: normal; font-size: 16px; color: var(--wp-muted); }
   .lbl em { display:block; font-style:normal; font-size: 14px; font-weight: 700; color: var(--wp-muted); } .lbl em.y { color: #f59e0b; } .lbl em.p { color: #a78bfa; } .lbl em.g { color: #22c55e; } .lbl em.c { color: #06b6d4; }
   .stage:not(.photo) #l-solar { left: 17.5%; top: 2%; } .stage:not(.photo) #l-grid { left: 70%; top: 6%; } .stage:not(.photo) #l-home { left: 55.5%; top: 77%; } .stage:not(.photo) #l-ev { left: 3%; top: 40%; }
   .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; object-position: 50% 50%; transition: opacity .9s ease;
     -webkit-mask-image: linear-gradient(to bottom, transparent, #000 11%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 11%, #000 86%, transparent); }
   .ph.car { opacity: 0; } .withcar .ph.car { opacity: 1; }
+  :host(:not([dark])) .ph { -webkit-mask-image: none; mask-image: none; }
   .lbl:empty { display:none; }
   .tiles { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
   .tile { display:flex; flex-direction:column; justify-content:space-between; gap: 10px; padding: 13px 14px 12px; border-radius: 18px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width: 0; }
@@ -1238,6 +1253,7 @@ const WP_SIDE_CSS = `
   .clim { container-type: inline-size; }
   .hp.photo { height: auto; width: auto; margin: 0 -18px; flex: 20 1 0; min-height: 110px; max-height: calc((100cqw + 0px) / var(--hp-ar, 2.26)); overflow: hidden; }
   .clim:has(.hp.photo) .rlist { flex: 1 0 auto; }
+  :host(:not([dark])) .hp.photo img { -webkit-mask-image: none; mask-image: none; }
   .hp.photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; filter: none;
     -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent); mask-image: linear-gradient(to bottom, #000 82%, transparent); }
   .clim:has(.hp.photo) { padding-top: 14px; } .clim:has(.hp.photo) .rrow { padding: 3px 4px; font-size: 17px; } .clim:has(.hp.photo) .rs { font-size: 15px; }
