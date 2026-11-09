@@ -30,7 +30,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.6.0";
+const WP_VERSION = "0.6.1";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -504,7 +504,7 @@ class WpClimate extends HTMLElement {
   }
   _signature() {
     const h = this._hass; const ids = [];
-    for (const r of this._config.rooms) ids.push(r.climate, r.temperature, r.humidity, r.power, r.preset, ...(r.extras || []));
+    for (const r of this._config.rooms) ids.push(r.climate, r.target_entity, r.temperature, r.humidity, r.power, r.preset, ...(r.extras || []));
     ids.push(this._config.outdoor, this._config.power_total, this._config.timer_entity, this._config.theme_entity);
     return ids.filter(Boolean).map((id) => { const s = h.states[id]; return s ? s.last_updated + s.state : "x"; }).join("|") + JSON.stringify(this._pending);
   }
@@ -520,11 +520,14 @@ class WpClimate extends HTMLElement {
     if (st && !["off", "unavailable", "unknown"].includes(st.state)) (this._lastSeen ||= {})[r.climate] = st.state;
     const sensT = r.temperature && num(h.states[r.temperature]?.state);
     const sensH = r.humidity && num(h.states[r.humidity]?.state);
+    // target_entity: an input_number that holds the wanted room temperature (an automation turns it into the AC setpoint)
+    const tg = r.target_entity ? h.states[r.target_entity] : null, ta = tg?.attributes || {};
     return {
       cfg: r, i, st, a, unavailable, mode, on: !unavailable && mode !== "off",
       cur: sensT ?? num(a.current_temperature), hum: sensH ?? num(a.current_humidity),
-      target: live && pend.temperature != null ? pend.temperature : num(a.temperature),
-      step: a.target_temp_step || (a.min_temp != null ? 0.5 : 1), min: a.min_temp ?? 16, max: a.max_temp ?? 30,
+      target: live && pend.temperature != null ? pend.temperature : tg ? num(tg.state) : num(a.temperature),
+      step: tg ? ta.step || 0.5 : a.target_temp_step || (a.min_temp != null ? 0.5 : 1),
+      min: tg ? ta.min ?? 16 : a.min_temp ?? 16, max: tg ? ta.max ?? 30 : a.max_temp ?? 30,
       action: a.hvac_action, fan: a.fan_mode, swing: a.swing_mode, hswing: a.swing_horizontal_mode,
       power: r.power ? num(h.states[r.power]?.state) : null,
       full: !!r.full,
@@ -565,16 +568,21 @@ class WpClimate extends HTMLElement {
     // debounce: show immediately, send once taps stop (avoids repeated AC beeps)
     ids.forEach((eid) => {
       const st = this._hass.states[eid]; if (!st) return;
-      const a = st.attributes; const step = a.target_temp_step || 1;
+      const tgt = this._targetEntity(eid), tg = tgt && this._hass.states[tgt];
+      const a = st.attributes; const step = tg ? tg.attributes.step || 0.5 : a.target_temp_step || 1;
+      const lo = tg ? tg.attributes.min ?? 16 : a.min_temp ?? 16, hi = tg ? tg.attributes.max ?? 30 : a.max_temp ?? 30;
       const p = this._pending[eid];
-      const cur = base != null ? base : p && p.until > Date.now() && p.temperature != null ? p.temperature : num(a.temperature) ?? 21;
+      const cur = base != null ? base : p && p.until > Date.now() && p.temperature != null ? p.temperature : (tg ? num(tg.state) : num(a.temperature)) ?? 21;
       let v = base != null ? base + delta : cur + delta * step;
-      v = Math.min(a.max_temp ?? 30, Math.max(a.min_temp ?? 16, Math.round(v / step) * step));
+      v = Math.min(hi, Math.max(lo, Math.round(v / step) * step));
       this._setPending(eid, { temperature: v });
       clearTimeout(this._sendTimers[eid]);
-      this._sendTimers[eid] = setTimeout(() => this._call("climate", "set_temperature", { entity_id: eid, temperature: v }), 1100);
+      this._sendTimers[eid] = setTimeout(() => (tgt
+        ? this._call("input_number", "set_value", { entity_id: tgt, value: v })
+        : this._call("climate", "set_temperature", { entity_id: eid, temperature: v })), 1100);
     });
   }
+  _targetEntity(eid) { return this._config.rooms.find((r) => r.climate === eid)?.target_entity || null; }
   _sem(ids, svc, attrList, SEM, key, field) {
     ids.forEach((eid) => {
       const raw = this._hass.states[eid]?.attributes[attrList];
@@ -625,11 +633,14 @@ class WpClimate extends HTMLElement {
     const idx = [...f.rooms]; if (!idx.length) { this._toast("Pick at least one room"); return; }
     const start = `${String(t.hh).padStart(2, "0")}:${String(t.mm).padStart(2, "0")}:00`;
     const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const data = { timeslots: [{ start, actions: idx.map((j) => {
-      const eid = rooms[j].climate;
-      if (f.act === "off") return { service: "climate.turn_off", entity_id: eid };
-      if (["heat", "cool", "heat_cool", "auto"].includes(f.mode)) return { service: "climate.set_temperature", entity_id: eid, service_data: { hvac_mode: f.mode, temperature: f.temp } };
-      return { service: "climate.set_hvac_mode", entity_id: eid, service_data: { hvac_mode: f.mode } };
+    const data = { timeslots: [{ start, actions: idx.flatMap((j) => {
+      const eid = rooms[j].climate, tgt = rooms[j].target_entity;
+      if (f.act === "off") return [{ service: "climate.turn_off", entity_id: eid }];
+      if (["heat", "cool", "heat_cool", "auto"].includes(f.mode)) {
+        return tgt ? [{ service: "input_number.set_value", entity_id: tgt, service_data: { value: f.temp } }, { service: "climate.set_hvac_mode", entity_id: eid, service_data: { hvac_mode: f.mode } }]
+          : [{ service: "climate.set_temperature", entity_id: eid, service_data: { hvac_mode: f.mode, temperature: f.temp } }];
+      }
+      return [{ service: "climate.set_hvac_mode", entity_id: eid, service_data: { hvac_mode: f.mode } }];
     }) }] };
     if (f.when === "once") {
       const d = new Date(); if (f.day === "tomorrow") d.setDate(d.getDate() + 1);
@@ -655,15 +666,17 @@ class WpClimate extends HTMLElement {
       const items = (this._sched || []).filter((it) => it.timeslots?.some((ts) => ts.actions?.some((a) => scopeIds.has(a.entity_id))));
       const DAYS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
       const rowHtml = (it) => {
-        const ts = it.timeslots[0] || {}, a = ts.actions?.[0] || {};
+        const ts = it.timeslots[0] || {}, acts = ts.actions || [];
+        const a = acts.find((x) => (x.entity_id || "").startsWith("climate.")) || acts[0] || {};
+        const tval = a.service_data?.temperature ?? acts.find((x) => x.service === "input_number.set_value")?.service_data?.value;
         const [hh, mm] = (ts.start || "00:00").split(":").map(Number);
         const tl = `${hh % 12 || 12}:${String(mm).padStart(2, "0")} ${hh >= 12 ? "pm" : "am"}`;
         const md = a.service === "climate.turn_off" ? null : a.service_data?.hvac_mode;
-        const what = !md ? "Turn off" : `${MODES[md]?.label || md}${a.service_data?.temperature != null ? ` ${a.service_data.temperature}°` : ""}`;
+        const what = !md ? "Turn off" : `${MODES[md]?.label || md}${tval != null ? ` ${tval}°` : ""}`;
         const once = it.repeat_type === "single";
         const day = once ? (() => { const d = new Date(`${it.start_date}T00:00:00`), t0 = new Date(); t0.setHours(0, 0, 0, 0); const diff = Math.round((d - t0) / 864e5); return diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }); })()
           : it.weekdays?.includes("daily") ? "Every day" : (it.weekdays || []).map((k) => DAYS[k] || k).join(", ");
-        const names = [...new Set(it.timeslots.flatMap((x) => x.actions.map((y) => y.entity_id)))].map((e) => rooms.find((r) => r.climate === e)?.name || e);
+        const names = [...new Set(it.timeslots.flatMap((x) => x.actions.map((y) => y.entity_id)).filter((e) => (e || "").startsWith("climate.")))].map((e) => rooms.find((r) => r.climate === e)?.name || e);
         const on = this._hass.states[it.entity_id]?.state === "on";
         const del = this._sdel === it.entity_id;
         return `<div class="srow ${on ? "" : "paused"}">
@@ -1403,7 +1416,7 @@ const TV_ACTIVE = ["playing", "paused", "on", "idle", "buffering"];
 class WpSide extends WpBase {
   _ids() {
     const c = this._config;
-    return [...(c.rooms || []).flatMap((r) => [r.climate, r.temperature]), ...(c.hot_water ? Object.values(c.hot_water) : []), ...(c.people || []).map((p) => p.entity), c.tv?.media_player, c.theme_entity];
+    return [...(c.rooms || []).flatMap((r) => [r.climate, r.temperature, r.target_entity]), ...(c.hot_water ? Object.values(c.hot_water) : []), ...(c.people || []).map((p) => p.entity), c.tv?.media_player, c.theme_entity];
   }
   _render() {
     const h = this._hass, c = this._config;
@@ -1418,7 +1431,7 @@ class WpSide extends WpBase {
     const h = this._hass, c = this._config;
     const rooms = (c.rooms || []).map((r) => {
       const s = h.states[r.climate]; const on = s && !["off", "unavailable", "unknown"].includes(s.state);
-      return { r, s, on, mode: s?.state, cur: (r.temperature && num(h.states[r.temperature]?.state)) ?? num(s?.attributes.current_temperature), target: num(s?.attributes.temperature) };
+      return { r, s, on, mode: s?.state, cur: (r.temperature && num(h.states[r.temperature]?.state)) ?? num(s?.attributes.current_temperature), target: r.target_entity ? num(h.states[r.target_entity]?.state) : num(s?.attributes.temperature) };
     });
     const temps = rooms.map((x) => x.cur).filter((v) => v != null);
     const avg = temps.length ? temps.reduce((a, v) => a + v, 0) / temps.length : null;

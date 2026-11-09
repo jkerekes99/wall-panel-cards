@@ -264,7 +264,7 @@ const TV_ACTIVE = ["playing", "paused", "on", "idle", "buffering"];
 class WpSide extends WpBase {
   _ids() {
     const c = this._config;
-    return [...(c.rooms || []).flatMap((r) => [r.climate, r.temperature]), ...(c.hot_water ? Object.values(c.hot_water) : []), ...(c.people || []).map((p) => p.entity), c.tv?.media_player, c.theme_entity];
+    return [...(c.rooms || []).flatMap((r) => [r.climate, r.temperature, r.target_entity]), ...(c.hot_water ? Object.values(c.hot_water) : []), ...(c.people || []).map((p) => p.entity), c.tv?.media_player, c.theme_entity];
   }
   _render() {
     const h = this._hass, c = this._config;
@@ -279,7 +279,7 @@ class WpSide extends WpBase {
     const h = this._hass, c = this._config;
     const rooms = (c.rooms || []).map((r) => {
       const s = h.states[r.climate]; const on = s && !["off", "unavailable", "unknown"].includes(s.state);
-      return { r, s, on, mode: s?.state, cur: (r.temperature && num(h.states[r.temperature]?.state)) ?? num(s?.attributes.current_temperature), target: num(s?.attributes.temperature) };
+      return { r, s, on, mode: s?.state, cur: (r.temperature && num(h.states[r.temperature]?.state)) ?? num(s?.attributes.current_temperature), target: r.target_entity ? num(h.states[r.target_entity]?.state) : num(s?.attributes.temperature) };
     });
     const temps = rooms.map((x) => x.cur).filter((v) => v != null);
     const avg = temps.length ? temps.reduce((a, v) => a + v, 0) / temps.length : null;
