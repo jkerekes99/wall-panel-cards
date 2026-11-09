@@ -30,7 +30,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.5";
+const WP_VERSION = "0.5.6";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -588,7 +588,8 @@ class WpClimate extends HTMLElement {
     const name = i === "all" ? "All rooms" : this._config.rooms[i].name;
     this._call("quick_timer", "run_action", {
       task_id: this._taskId(i), delay: minutes, unit: "minutes", task_label: `${name} ${anyOn ? "off" : "on"}`,
-      finish_actions: [{ service: anyOn ? "climate.turn_off" : "climate.turn_on", target: { entity_id: ids } }],
+      // Quick Timer keys its bookkeeping on each action's target entity_id, so it must be a single string (a list raises "unhashable type: 'list'")
+      finish_actions: ids.map((eid) => ({ service: anyOn ? "climate.turn_off" : "climate.turn_on", target: { entity_id: eid } })),
     });
   }
   _cancelTimer(i) { this._call("quick_timer", "cancel_action", { task_id: this._taskId(i) }); }
