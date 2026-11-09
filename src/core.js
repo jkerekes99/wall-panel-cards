@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.6.1";
+const WP_VERSION = "0.6.2";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -804,7 +804,7 @@ class WpClimate extends HTMLElement {
     const step = all ? Math.max(...sel.map((r) => r.step)) : r0.step;
     const showFanVane = all || r0.full;
     const union = (attr) => [...new Set(sel.flatMap((r) => r.a[attr] || []))];
-    const modes = MODE_ORDER.filter((m) => union("hvac_modes").includes(m));
+    const modes = MODE_ORDER.filter((m) => union("hvac_modes").includes(m)).filter((m, k, arr) => arr.findIndex((x) => MODES[x].label === MODES[m].label) === k);
     const fans = semOptions(union("fan_modes"), FAN_SEM).filter((o) => !all || ["auto", "quiet", "low", "medium", "high", "max"].includes(o.key));
     const vanes = semOptions(union("swing_modes"), VANE_SEM);
     const hvanes = semOptions(union("swing_horizontal_modes"), HVANE_SEM);
@@ -838,7 +838,8 @@ class WpClimate extends HTMLElement {
           <button class="powerbtn ${anyOn ? "is-on" : ""}" data-act="${all ? (anyOn ? "selOff" : "selOn") : "power"}" data-i="${r0.i}">${icon("mdi:power")}${anyOn ? (all ? "Turn selected off" : "Turn off") : (all ? "Turn selected on" : "Turn on")}</button>
           <div class="timerline">${tmr
             ? `${icon("mdi:timer-sand")}<span><b>${tmr.off ? "Turns off" : "Turns on"} in ${this._fmtLeft(tmr.left)}</b></span><button class="link" data-act="tcancel" data-i="${all ? "all" : r0.i}">Cancel</button>`
-            : `<button class="tbtn" data-act="topen" data-i="${all ? "all" : r0.i}">${icon("mdi:timer-outline")}${all ? "Timer for selected rooms" : "Timer"}</button>`}</div>
+            : `<button class="tbtn" data-act="topen" data-i="${all ? "all" : r0.i}">${icon("mdi:timer-outline")}Timer</button>`}
+            <button class="tbtn" data-act="schedules" data-i="${all ? "all" : r0.i}">${icon("mdi:calendar-clock")}Schedules</button></div>
         </div>
         <div class="right">
           ${this._group("Mode", modes.map((m) => ({ key: m, label: MODES[m].label, icon: MODES[m].icon, on: anyOn && mode === m, cls: `m-${MODES[m].c}` })), all ? "allmode" : "mode")}
@@ -848,7 +849,6 @@ class WpClimate extends HTMLElement {
           ${preset ? this._group("Preset", (preset.attributes.options || []).map((o) => ({ key: o, label: PRESET_LABEL[o] || o, on: preset.state === o })), "preset") : ""}
           ${extras.length ? `<div class="grp"><h4>Comfort features</h4><div class="opts">${extras.map(([e, s]) => `<button class="opt sw ${s.state === "on" ? "on" : ""}" data-act="extra" data-e="${e}">${icon(s.state === "on" ? "mdi:toggle-switch" : "mdi:toggle-switch-off-outline")}<span>${$esc((s.attributes.friendly_name || e).replace(r0.cfg.strip_name || /^.*AC /, ""))}</span></button>`).join("")}</div></div>` : ""}
           ${!all && !r0.full ? `<p class="note">${icon("mdi:information-outline")}Fan and air-direction controls appear here once this room is converted to ProtoART.</p>` : ""}
-          <button class="rowbtn sm" data-act="schedules" data-i="${all ? "all" : r0.i}">${icon("mdi:calendar-clock")}<span>Schedules</span>${icon("mdi:chevron-right", "chev")}</button>
         </div>
       </div>
     </div>`;
@@ -1052,7 +1052,7 @@ const WP_CLIMATE_CSS = `
   .round.lg { position:absolute; bottom: 2%; width: 72px; height: 72px; } .dm { left: -4%; } .dp { right: -4%; }
   .powerbtn { border: 1px solid var(--wp-border); cursor:pointer; width: 100%; max-width: 380px; height: 68px; border-radius: 20px; font-size: 21px; font-weight: 700; display:flex; align-items:center; justify-content:center; gap: 10px; background: var(--wp-accent); color: #fff; box-shadow: var(--wp-glow); }
   .powerbtn.is-on { background: var(--wp-card-2); color: var(--wp-bad); box-shadow: none; } .powerbtn ha-icon { --mdc-icon-size: 28px; }
-  .timerline { display:flex; align-items:center; gap: 8px; flex-wrap: wrap; justify-content:center; color: var(--wp-muted); font-size: 17px; }
+  .timerline { display:flex; align-items:center; gap: 10px; flex-wrap: wrap; justify-content:center; color: var(--wp-muted); font-size: 17px; }
   .timerline b { color: var(--wp-warn); } .tbtn { cursor:pointer; display:flex; align-items:center; gap: 8px; border: 1px solid var(--wp-border); background: var(--wp-card-2); border-radius: 14px; padding: 12px 20px; font-size: 18px; font-weight: 700; }
   .tq { text-align:center; color: var(--wp-muted); font-size: 22px; margin: 22px 0 6px; }
   .wheels { position: relative; display:flex; justify-content:center; align-items:center; gap: 6px; height: 280px; margin: 0 24px; }
