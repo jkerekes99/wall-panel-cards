@@ -19,6 +19,9 @@ Set `theme` (`auto` | `light` | `dark`) or `theme_entity` (an `input_select` wit
 ## Theme
 `theme_entity` (an input_select) or `theme:` picks `Auto` (HA/device dark mode), `Light`, `Dark` or `Sun` (dark while `sun.sun` is below the horizon; add `sun_elevation: -4` to switch at that solar elevation instead).
 
+## Weather dialog (wp-page)
+`weather_popup: dialog` opens a built-in forecast dialog (current conditions, next 24 hours, 7 days) sized to its content; `weather_hourly:` names a separate hourly weather entity if the main one only has daily forecasts. Any other `weather_popup` value is navigated to as a hash (e.g. a Bubble pop-up).
+
 ## Status chips (wp-page)
 `chips:` adds count chips to the top bar; tapping one opens a list of what is on/open.
 ```yaml
@@ -31,6 +34,8 @@ chips:
     empty: All lights are off
     control: true                     # per-item "Turn off" + "Turn all off"
     items: {domain: light}            # or {entities: [...]} or {group: binary_sensor.all_doors}; optional exclude: [...]
+    count_items: true                 # count the (filtered) list instead of using entity
+    group_by_area: true               # section the list by area
 ```
 
 ## Photos (optional)

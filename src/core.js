@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.2";
+const WP_VERSION = "0.5.3";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -113,6 +113,7 @@ class WpPage extends HTMLElement {
     this._updateHeader();
     this._renderChips();
     this._renderLayer();
+    if (this._wxOpen) this._renderWx();
     (this._children || []).forEach((c) => { c.hass = hass; });
   }
   async _build() {
@@ -128,7 +129,7 @@ class WpPage extends HTMLElement {
             <div class="clock"><b id="time">–</b><small id="date"></small></div>
           </div>
         </nav>
-        <div id="layer"></div>
+        <div id="layer"></div><div id="wxlayer"></div>
         <main class="grid" style="${c.grid ? `grid-template-columns:${c.grid.columns || "1fr"};grid-template-rows:${c.grid.rows || "auto"};grid-template-areas:${c.grid.areas || "none"};` : ""}"></main>
       </div>`;
     root.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => {
@@ -141,7 +142,11 @@ class WpPage extends HTMLElement {
     });
     root.getElementById("layer").addEventListener("click", (e) => this._layerClick(e));
     root.getElementById("wx").addEventListener("click", () => {
-      if (c.weather_popup) navigate(`${location.pathname}${c.weather_popup}`);
+      if (c.weather_popup === "dialog") { this._wxOpen = true; this._wxAnim = Date.now() + 450; this._wxSubscribe(); this._renderWx(); }
+      else if (c.weather_popup) navigate(`${location.pathname}${c.weather_popup}`);
+    });
+    root.getElementById("wxlayer").addEventListener("click", (e) => {
+      if (e.target.closest("[data-close]")) { this._wxOpen = false; this._wxUnsub(); this._renderWx(); }
     });
     this._markActive();
     this._updateClock();
@@ -170,6 +175,54 @@ class WpPage extends HTMLElement {
     this._built = true;
     if (this._hass) this.hass = this._hass;
   }
+  /* ---------- weather dialog (daily + hourly forecast, sized to its content) ---------- */
+  async _wxSubscribe() {
+    this._wxUnsub(); this._wxF = this._wxF || {};
+    const c = this._config, conn = this._hass?.connection; if (!conn) return;
+    const sub = async (entity_id, forecast_type) => {
+      try { return await conn.subscribeMessage((m) => { this._wxF[forecast_type] = m.forecast || []; this._renderWx(); }, { type: "weather/subscribe_forecast", entity_id, forecast_type }); }
+      catch (err) { console.warn("wp weather forecast", entity_id, forecast_type, err); return null; }
+    };
+    this._wxSubs = (await Promise.all([sub(c.weather, "daily"), sub(c.weather_hourly || c.weather, "hourly")])).filter(Boolean);
+  }
+  _wxUnsub() { (this._wxSubs || []).forEach((u) => { try { u(); } catch (e) { /* already closed */ } }); this._wxSubs = []; }
+  _renderWx() {
+    const el = this.shadowRoot?.getElementById("wxlayer"); if (!el) return;
+    let html = "";
+    const h = this._hass, w = h?.states[this._config.weather];
+    if (this._wxOpen && w) {
+      const a = w.attributes, F = this._wxF || {}, unit = a.temperature_unit || "°C";
+      const [ic, label] = COND[w.state] || ["mdi:weather-partly-cloudy", w.state];
+      const d = F.daily || [], hr = (F.hourly || []).filter((x) => new Date(x.datetime) > Date.now() - 3600e3).slice(0, 24);
+      const today = d[0];
+      const r0 = (v) => (v == null ? "–" : Math.round(v));
+      const hh = (iso) => new Date(iso).toLocaleTimeString([], { hour: "numeric" }).replace(/\s/g, "").toLowerCase();
+      const dn = (iso, i) => (i === 0 ? "Today" : new Date(iso).toLocaleDateString([], { weekday: "short" }));
+      const lo = Math.min(...d.map((x) => x.templow ?? x.temperature)), hi = Math.max(...d.map((x) => x.temperature));
+      const rain = (p) => (p ? `<span class="rp">${icon("mdi:water")}${Math.round(p)}%</span>` : `<span class="rp none"></span>`);
+      const anim = (this._wxAnim || 0) > Date.now() ? " anim" : "";
+      html = `<div class="ov${anim}" data-close="1"></div>
+        <section class="dlg wxd${anim}" role="dialog">
+          <header class="wxh">${icon(ic, "wxbig")}
+            <div class="wxnow"><b>${r0(a.temperature)}<i>${unit}</i></b><span>${$esc(label)}</span></div>
+            <div class="wxmeta">
+              ${today ? `<span>${icon("mdi:arrow-up")}${r0(today.temperature)}°  ${icon("mdi:arrow-down")}${r0(today.templow)}°</span>` : ""}
+              ${a.humidity != null ? `<span>${icon("mdi:water-percent")}${Math.round(a.humidity)}% humidity</span>` : ""}
+              ${a.wind_speed != null ? `<span>${icon("mdi:weather-windy")}${Math.round(a.wind_speed)} ${$esc(a.wind_speed_unit || "km/h")}${a.wind_bearing != null ? ` ${$esc(String(a.wind_bearing))}` : ""}</span>` : ""}
+              ${today?.precipitation_probability ? `<span>${icon("mdi:umbrella-outline")}${Math.round(today.precipitation_probability)}% chance of rain</span>` : ""}
+            </div>
+            <button class="x" data-close="1" aria-label="Close">${icon("mdi:close")}</button></header>
+          ${hr.length ? `<div class="hrs">${hr.map((x) => `<div class="hc"><small>${hh(x.datetime)}</small>${icon((COND[x.condition] || ["mdi:weather-partly-cloudy"])[0])}<b>${r0(x.temperature)}°</b>${x.precipitation_probability ? `<em>${Math.round(x.precipitation_probability)}%</em>` : "<em></em>"}</div>`).join("")}</div>` : ""}
+          <div class="days">${d.length ? d.slice(0, 7).map((x, i) => {
+            const l = x.templow ?? x.temperature, span = Math.max(1, hi - lo);
+            return `<div class="dr"><span class="dn">${dn(x.datetime, i)}</span>${icon((COND[x.condition] || ["mdi:weather-partly-cloudy"])[0], "di")}${rain(x.precipitation_probability)}
+              <span class="tl">${r0(x.templow)}°</span><span class="rng"><i style="left:${((l - lo) / span) * 100}%;right:${((hi - x.temperature) / span) * 100}%"></i></span><span class="th">${r0(x.temperature)}°</span></div>`;
+          }).join("") : `<div class="empty">Loading forecast…</div>`}</div>
+          ${a.attribution ? `<footer>${$esc(a.attribution)}</footer>` : ""}
+        </section>`;
+    }
+    if (html !== this._wxHtml) { this._wxHtml = html; el.innerHTML = html; }
+  }
   /* ---------- status chips + "what's on" list dialog ---------- */
   _chipItems(ch) {
     const h = this._hass, src = ch.items || {}, on = ch.on_state || "on";
@@ -184,7 +237,7 @@ class WpPage extends HTMLElement {
   _renderChips() {
     const el = this.shadowRoot?.getElementById("chips"); if (!el || !this._hass) return;
     const html = this._config.chips.map((ch, i) => {
-      const n = ch.entity ? num(this._hass.states[ch.entity]?.state) : this._chipItems(ch).length;
+      const n = ch.entity && !ch.count_items ? num(this._hass.states[ch.entity]?.state) : this._chipItems(ch).length;
       return `<button class="chip ${n ? "" : "zero"}" data-chip="${i}" style="--chip:${$esc(ch.color || "var(--wp-accent)")}" aria-label="${$esc(ch.name || "")}">${icon(ch.icon || "mdi:circle")}<b>${n ?? "–"}</b></button>`;
     }).join("");
     if (html !== this._chipsHtml) { this._chipsHtml = html; el.innerHTML = html; }
@@ -196,13 +249,20 @@ class WpPage extends HTMLElement {
     if (ch) {
       const h = this._hass, items = this._chipItems(ch), ctl = !!ch.control;
       const area = (st) => { const e = h.entities?.[st.entity_id]; const a = e?.area_id || (e?.device_id && h.devices?.[e.device_id]?.area_id); return a ? h.areas?.[a]?.name : null; };
-      const rows = items.map((st) => {
+      const row = (st) => {
         const a = st.attributes, bri = a.brightness != null ? `${Math.round((a.brightness / 255) * 100)}%` : null;
-        const sub = [area(st), bri, `${ch.since || "on"} for ${agoLong(st.last_changed)}`].filter(Boolean).join(" · ");
+        const sub = [ch.group_by_area ? null : area(st), bri, `${ch.since || "on"} for ${agoLong(st.last_changed)}`].filter(Boolean).join(" · ");
         return `<div class="li"><span class="lic" style="--chip:${$esc(ch.color || "var(--wp-accent)")}">${icon(a.icon || ch.item_icon || ch.icon)}</span>
           <div class="lit"><b>${$esc(a.friendly_name || st.entity_id)}</b><small>${$esc(sub)}</small></div>
           ${ctl ? `<button class="off" data-off="${$esc(st.entity_id)}">${icon("mdi:power")}Turn off</button>` : ""}</div>`;
-      }).join("");
+      };
+      let rows;
+      if (ch.group_by_area) {
+        const groups = new Map();
+        items.forEach((st) => { const k = area(st) || "Other"; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(st); });
+        rows = [...groups.entries()].sort((x, y) => (x[0] === "Other") - (y[0] === "Other") || x[0].localeCompare(y[0]))
+          .map(([name, list]) => `<div class="sec"><h5>${$esc(name)}<span>${list.length}</span></h5>${list.map(row).join("")}</div>`).join("");
+      } else rows = items.map(row).join("");
       const anim = (this._chipAnim || 0) > Date.now() ? " anim" : "";
       html = `<div class="ov${anim}" data-close="1"></div>
         <section class="dlg${anim}" role="dialog">
@@ -290,6 +350,24 @@ const WP_PAGE_CSS = `
   .list { overflow-y: auto; padding: 8px 12px 14px; }
   .li { display:flex; align-items:center; gap: 14px; padding: 12px 10px; border-bottom: 1px solid var(--wp-border); } .li:last-child { border-bottom: 0; }
   .lit { flex: 1; min-width: 0; } .lit b { display:block; font-size: 19px; } .lit small { display:block; color: var(--wp-muted); font-size: 15px; margin-top: 2px; }
+  .sec h5 { display:flex; align-items:center; gap: 8px; margin: 14px 10px 4px; font-size: 14px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--wp-muted); }
+  .sec:first-child h5 { margin-top: 6px; } .sec h5 span { font-size: 12px; padding: 1px 8px; border-radius: 999px; background: var(--wp-card-2); letter-spacing: 0; }
+  .wxd { width: min(860px, 94vw); }
+  .wxh { gap: 18px; padding: 20px 20px 18px 24px; }
+  .wxbig { --mdc-icon-size: 64px; color: #fbbf24; flex: none; }
+  .wxnow { display:flex; flex-direction:column; flex: none; } .wxnow b { font-size: 52px; font-weight: 800; line-height: 1; } .wxnow b i { font-style: normal; font-size: 24px; color: var(--wp-muted); margin-left: 2px; } .wxnow span { font-size: 18px; font-weight: 700; margin-top: 4px; }
+  .wxh .wxmeta { flex: 1; display:flex; flex-wrap: wrap; gap: 8px 18px; color: var(--wp-muted); font-size: 16px; font-weight: 600; }
+  .wxmeta span { display:flex; align-items:center; gap: 5px; white-space: nowrap; } .wxmeta ha-icon { --mdc-icon-size: 19px; color: var(--wp-accent); }
+  .hrs { display:flex; gap: 6px; overflow-x: auto; padding: 14px 16px; border-bottom: 1px solid var(--wp-border); scrollbar-width: none; }
+  .hc { flex: none; width: 62px; display:flex; flex-direction:column; align-items:center; gap: 4px; padding: 8px 0; border-radius: 14px; background: var(--wp-card-2); }
+  .hc small { font-size: 13px; color: var(--wp-muted); font-weight: 700; } .hc ha-icon { --mdc-icon-size: 26px; color: #fbbf24; } .hc b { font-size: 18px; } .hc em { font-style: normal; font-size: 12px; font-weight: 700; color: #38bdf8; min-height: 15px; }
+  .days { padding: 6px 18px 10px; }
+  .dr { display:grid; grid-template-columns: 70px 34px 64px 40px 1fr 40px; align-items:center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--wp-border); font-size: 18px; } .dr:last-child { border-bottom: 0; }
+  .dn { font-weight: 700; } .di { --mdc-icon-size: 28px; color: #fbbf24; }
+  .rp { display:flex; align-items:center; gap: 2px; font-size: 14px; font-weight: 700; color: #38bdf8; } .rp ha-icon { --mdc-icon-size: 16px; }
+  .tl { color: var(--wp-muted); text-align: right; font-weight: 600; } .th { font-weight: 800; }
+  .rng { position: relative; height: 8px; border-radius: 999px; background: var(--wp-track); } .rng i { position:absolute; top:0; bottom:0; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #fbbf24 60%, #f97316); }
+  .wxd footer { padding: 8px 20px 14px; font-size: 12px; color: var(--wp-faint); }
   .empty { display:flex; flex-direction:column; align-items:center; gap: 10px; padding: 36px 10px; color: var(--wp-muted); font-size: 18px; } .empty ha-icon { --mdc-icon-size: 40px; opacity: .6; }
   .grid { flex:1; display:grid; gap: var(--wp-gap); min-height: 0; }
   .page.fit { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; } .page.fit .grid > .cell:not(.popup) { min-height: 0; overflow: hidden; }
