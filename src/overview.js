@@ -28,7 +28,7 @@ class WpBase extends HTMLElement {
 
 /* ---------------- wp-power-flow ---------------- */
 class WpPowerFlow extends WpBase {
-  _ids() { const c = this._config; const s = c.stats || {}; return [c.solar, c.grid_import, c.grid_export, c.home, c.ev, c.ev_connected, "sun.sun", s.generation, s.import, s.export, c.theme_entity]; }
+  _ids() { const c = this._config; const s = c.stats || {}; return [c.solar, c.grid_import, c.grid_export, c.home, c.ev, c.ev_connected, c.car_plugged, "sun.sun", s.generation, s.import, s.export, c.theme_entity]; }
   _extraSig() { return this._statsAt || ""; }
   _firstHass() { this._loadStats(); this._statTimer = setInterval(() => this._loadStats(), 5 * 60000); }
   disconnectedCallback() { clearInterval(this._statTimer); }

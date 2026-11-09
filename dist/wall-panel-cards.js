@@ -30,7 +30,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.0";
+const WP_VERSION = "0.5.1";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -46,6 +46,12 @@ function wpIsDark(hass, cfg) {
   const mode = (ent ? ent.state : cfg.theme || "auto").toLowerCase();
   if (mode === "dark") return true;
   if (mode === "light") return false;
+  if (mode === "sun") {
+    // Dark while the sun is down. With sun_elevation (e.g. -4) it switches at that elevation instead, i.e. later at dusk.
+    const sun = hass?.states["sun.sun"]; if (!sun) return !!hass?.themes?.darkMode;
+    const lim = cfg.sun_elevation;
+    return lim != null && sun.attributes?.elevation != null ? sun.attributes.elevation < lim : sun.state === "below_horizon";
+  }
   return !!hass?.themes?.darkMode;
 }
 const agoLong = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "under a minute" : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`; };
@@ -175,6 +181,7 @@ class WpPage extends HTMLElement {
     this._children = (c.cards || []).map((cc) => {
       const { area, style, popup, ...conf } = cc;
       if (conf.type?.startsWith("custom:wp-") && c.theme_entity && !conf.theme_entity) conf.theme_entity = c.theme_entity;
+      if (conf.type?.startsWith("custom:wp-") && c.sun_elevation != null && conf.sun_elevation == null) conf.sun_elevation = c.sun_elevation;
       if (conf.type?.startsWith("custom:wp-") && c.theme && !conf.theme) conf.theme = c.theme;
       const el = helpers.createCardElement(conf);
       const isPopup = !!(popup || conf.type === "custom:bubble-card");
@@ -901,7 +908,7 @@ class WpBase extends HTMLElement {
 
 /* ---------------- wp-power-flow ---------------- */
 class WpPowerFlow extends WpBase {
-  _ids() { const c = this._config; const s = c.stats || {}; return [c.solar, c.grid_import, c.grid_export, c.home, c.ev, c.ev_connected, "sun.sun", s.generation, s.import, s.export, c.theme_entity]; }
+  _ids() { const c = this._config; const s = c.stats || {}; return [c.solar, c.grid_import, c.grid_export, c.home, c.ev, c.ev_connected, c.car_plugged, "sun.sun", s.generation, s.import, s.export, c.theme_entity]; }
   _extraSig() { return this._statsAt || ""; }
   _firstHass() { this._loadStats(); this._statTimer = setInterval(() => this._loadStats(), 5 * 60000); }
   disconnectedCallback() { clearInterval(this._statTimer); }

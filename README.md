@@ -16,6 +16,9 @@ Add this repository to Home Assistant's Marketplace (HACS) as a custom **Dashboa
 ## Light / dark
 Set `theme` (`auto` | `light` | `dark`) or `theme_entity` (an `input_select` with Auto/Light/Dark) on `wp-page`; child `wp-*` cards inherit it.
 
+## Theme
+`theme_entity` (an input_select) or `theme:` picks `Auto` (HA/device dark mode), `Light`, `Dark` or `Sun` (dark while `sun.sun` is below the horizon; add `sun_elevation: -4` to switch at that solar elevation instead).
+
 ## Status chips (wp-page)
 `chips:` adds count chips to the top bar; tapping one opens a list of what is on/open.
 ```yaml
