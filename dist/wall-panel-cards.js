@@ -30,7 +30,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.3";
+const WP_VERSION = "0.5.4";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -358,6 +358,7 @@ const WP_PAGE_CSS = `
   .clock { text-align: right; padding: 0 8px; min-width: 104px; }
   .clock b { font-size: 24px; }
   .chips { display:flex; gap: 8px; flex: none; margin-left: 6px; }
+  #layer, #wxlayer { display: contents; }  /* dialog hosts: no box of their own, so they don't add a flex gap to the page */
   .chip { all: unset; cursor: pointer; display:flex; align-items:center; gap: 7px; height: 46px; padding: 0 14px 0 12px; border-radius: 14px; background: color-mix(in srgb, var(--chip) 16%, transparent); color: var(--wp-text); font-size: 19px; font-weight: 700; transition: opacity .2s, background .2s; }
   .chip ha-icon { --mdc-icon-size: 24px; color: var(--chip); }
   .chip.zero { background: var(--wp-card-2); opacity: .5; } .chip.zero ha-icon { color: var(--wp-muted); }
