@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.5.6";
+const WP_VERSION = "0.6.0";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -562,6 +562,115 @@ class WpClimate extends HTMLElement {
       finish_actions: ids.map((eid) => ({ service: anyOn ? "climate.turn_off" : "climate.turn_on", target: { entity_id: eid } })),
     });
   }
+  /* ---------- schedules (Scheduler integration backend, own UI) ---------- */
+  async _loadSched() {
+    try { this._sched = await this._hass.callWS({ type: "scheduler" }); } catch (e) { this._sched = []; this._toast("Couldn't load schedules (is the Scheduler integration installed?)"); }
+    this._render();
+  }
+  _schedScope() {
+    const S = this._ssheet, rooms = this._config.rooms;
+    if (S.scope !== "all") return [S.scope];
+    return S.only && S.only.length ? S.only : rooms.map((_, j) => j);
+  }
+  _schedDefaults() {
+    const S = this._ssheet, idx = this._schedScope(), r0 = this._room(idx[0]);
+    const t = new Date(Date.now() + 60 * 60e3); let h = t.getHours(), m = Math.ceil(t.getMinutes() / 5) * 5; if (m === 60) { m = 0; h = (h + 1) % 24; }
+    const mode = r0.on && ["heat", "cool", "dry", "fan_only", "heat_cool", "auto"].includes(r0.mode) ? r0.mode : (this._lastSeen || {})[r0.cfg.climate] || "heat";
+    return { when: "once", day: "today", wd: new Set(["mon", "tue", "wed", "thu", "fri", "sat", "sun"]), h: (h % 12 || 12) - 1, m: m / 5, p: h >= 12 ? 1 : 0,
+      act: "on", mode, temp: r0.target ?? 21, step: Math.max(...idx.map((j) => this._room(j).step || 1)), rooms: new Set(idx) };
+  }
+  _schedTime(f) { const h12 = f.h + 1, hh = (h12 % 12) + (f.p ? 12 : 0); return { hh, mm: f.m * 5, label: `${h12}:${String(f.m * 5).padStart(2, "0")} ${f.p ? "pm" : "am"}` }; }
+  _updSched() {
+    const el = this.shadowRoot.querySelector(".ssum"); const f = this._ssheet?.f; if (!el || !f) return;
+    el.innerHTML = this._schedSummary(f);
+  }
+  _schedSummary(f) {
+    const t = this._schedTime(f), DAYS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+    const what = f.act === "off" ? "Turn off" : `${MODES[f.mode]?.label || f.mode}${["heat", "cool", "heat_cool", "auto"].includes(f.mode) ? ` ${fmtT(f.temp, f.step)}°` : ""}`;
+    const when = f.when === "once" ? (f.day === "today" ? "today" : "tomorrow") : f.wd.size === 7 ? "every day" : [...f.wd].map((k) => DAYS[k]).join(", ") || "no days picked";
+    return `<b>${$esc(what)}</b> at <b>${t.label}</b> ${$esc(when)}`;
+  }
+  _saveSched() {
+    const f = this._ssheet.f, rooms = this._config.rooms, t = this._schedTime(f);
+    const idx = [...f.rooms]; if (!idx.length) { this._toast("Pick at least one room"); return; }
+    const start = `${String(t.hh).padStart(2, "0")}:${String(t.mm).padStart(2, "0")}:00`;
+    const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const data = { timeslots: [{ start, actions: idx.map((j) => {
+      const eid = rooms[j].climate;
+      if (f.act === "off") return { service: "climate.turn_off", entity_id: eid };
+      if (["heat", "cool", "heat_cool", "auto"].includes(f.mode)) return { service: "climate.set_temperature", entity_id: eid, service_data: { hvac_mode: f.mode, temperature: f.temp } };
+      return { service: "climate.set_hvac_mode", entity_id: eid, service_data: { hvac_mode: f.mode } };
+    }) }] };
+    if (f.when === "once") {
+      const d = new Date(); if (f.day === "tomorrow") d.setDate(d.getDate() + 1);
+      d.setHours(t.hh, t.mm, 0, 0);
+      if (d.getTime() <= Date.now() + 30e3) { this._toast("That time has already passed today"); return; }
+      Object.assign(data, { weekdays: ["daily"], start_date: ymd(d), end_date: ymd(d), repeat_type: "single" });
+    } else {
+      if (!f.wd.size) { this._toast("Pick at least one day"); return; }
+      Object.assign(data, { weekdays: f.wd.size === 7 ? ["daily"] : ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].filter((k) => f.wd.has(k)), repeat_type: "repeat" });
+    }
+    const who = idx.length === rooms.length ? "All rooms" : idx.map((j) => rooms[j].name).join(", ");
+    data.name = `${who} · ${this._schedSummary(f).replace(/<[^>]+>/g, "")}`.slice(0, 120);
+    this._call("scheduler", "add", data);
+    this._ssheet.view = "list"; this._render(); setTimeout(() => this._loadSched(), 500);
+  }
+  _schedSheet() {
+    const S = this._ssheet, rooms = this._config.rooms;
+    const scopeIdx = this._schedScope(), scopeIds = new Set(scopeIdx.map((j) => rooms[j].climate));
+    const who = S.scope === "all" ? (S.only ? `${scopeIdx.length} selected room${scopeIdx.length === 1 ? "" : "s"}` : "All rooms") : rooms[S.scope].name;
+    const head = (sub, back) => `<header><div class="sh-title">${back ? `<button class="x sm" data-act="sback" aria-label="Back">${icon("mdi:arrow-left")}</button>` : icon("mdi:calendar-clock")}<div><h2>${back ? "New schedule" : "Schedules"}</h2><p>${$esc(sub)}</p></div></div>
+      <button class="x" data-act="sclose" aria-label="Close">${icon("mdi:close")}</button></header>`;
+    if (S.view === "list") {
+      const items = (this._sched || []).filter((it) => it.timeslots?.some((ts) => ts.actions?.some((a) => scopeIds.has(a.entity_id))));
+      const DAYS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+      const rowHtml = (it) => {
+        const ts = it.timeslots[0] || {}, a = ts.actions?.[0] || {};
+        const [hh, mm] = (ts.start || "00:00").split(":").map(Number);
+        const tl = `${hh % 12 || 12}:${String(mm).padStart(2, "0")} ${hh >= 12 ? "pm" : "am"}`;
+        const md = a.service === "climate.turn_off" ? null : a.service_data?.hvac_mode;
+        const what = !md ? "Turn off" : `${MODES[md]?.label || md}${a.service_data?.temperature != null ? ` ${a.service_data.temperature}°` : ""}`;
+        const once = it.repeat_type === "single";
+        const day = once ? (() => { const d = new Date(`${it.start_date}T00:00:00`), t0 = new Date(); t0.setHours(0, 0, 0, 0); const diff = Math.round((d - t0) / 864e5); return diff === 0 ? "Today" : diff === 1 ? "Tomorrow" : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }); })()
+          : it.weekdays?.includes("daily") ? "Every day" : (it.weekdays || []).map((k) => DAYS[k] || k).join(", ");
+        const names = [...new Set(it.timeslots.flatMap((x) => x.actions.map((y) => y.entity_id)))].map((e) => rooms.find((r) => r.climate === e)?.name || e);
+        const on = this._hass.states[it.entity_id]?.state === "on";
+        const del = this._sdel === it.entity_id;
+        return `<div class="srow ${on ? "" : "paused"}">
+          <span class="sic ${md ? `m-${MODES[md]?.c || "auto"}` : "m-off"}">${icon(md ? MODES[md]?.icon || "mdi:power" : "mdi:power-off")}</span>
+          <div class="stx"><b>${$esc(what)} · ${tl}</b><small>${once ? "Once · " : ""}${$esc(day)}${S.scope === "all" || names.length > 1 ? ` · ${$esc(names.join(", "))}` : ""}</small></div>
+          <button class="tgl ${on ? "on" : ""}" data-act="stoggle" data-e="${$esc(it.entity_id)}" aria-label="${on ? "Pause" : "Resume"}"><i></i></button>
+          <button class="sdel ${del ? "arm" : ""}" data-act="sdel" data-e="${$esc(it.entity_id)}">${icon("mdi:trash-can-outline")}${del ? "Delete" : ""}</button></div>`;
+      };
+      return `<div class="scrim top" data-act="sclose"></div><div class="sheet small tsheet ssheet">${head(who, false)}
+        <div class="slist">${this._sched == null ? `<p class="sempty">Loading…</p>` : items.length ? items.map(rowHtml).join("") : `<p class="sempty">${icon("mdi:calendar-blank-outline")}No schedules yet</p>`}</div>
+        <div class="sfoot"><button class="bigbtn on wide" data-act="sadd">${icon("mdi:plus")}Add schedule</button></div></div>`;
+    }
+    const f = S.f, idx = [...f.rooms].length ? [...f.rooms] : scopeIdx;
+    const modes = MODE_ORDER.filter((m) => idx.some((j) => (this._room(j).a.hvac_modes || []).includes(m)))
+      .filter((m, k, arr) => arr.findIndex((x) => MODES[x].label === MODES[m].label) === k);   // heat_cool and auto both read "Auto"
+    const showT = f.act === "on" && ["heat", "cool", "heat_cool", "auto"].includes(f.mode);
+    const seg = (act, opts, cur) => `<div class="seg">${opts.map(([k, l]) => `<button class="${cur === k ? "on" : ""}" data-act="${act}" data-k="${k}">${l}</button>`).join("")}</div>`;
+    const col = (w, labels) => `<div class="wheel" data-store="s" data-w="${w}">${labels.map((l, k) => `<div class="wi" data-v="${k}">${l}</div>`).join("")}</div>`;
+    return `<div class="scrim top" data-act="sclose"></div><div class="sheet small tsheet ssheet wide">${head(who, true)}
+      ${S.scope === "all" ? `<div class="chips">${rooms.map((r, j) => `<button class="chip ${f.rooms.has(j) ? "on" : ""}" data-act="sroom" data-i="${j}">${icon(f.rooms.has(j) ? "mdi:checkbox-marked-circle" : "mdi:checkbox-blank-circle-outline")}${$esc(r.name)}</button>`).join("")}</div>` : ""}
+      <div class="sform">
+        <div class="scol">
+          <h4>When</h4>${seg("swhen", [["once", "Once"], ["repeat", "Repeat"]], f.when)}
+          ${f.when === "once" ? seg("sday", [["today", "Today"], ["tomorrow", "Tomorrow"]], f.day)
+            : `<div class="wds">${["mon", "tue", "wed", "thu", "fri", "sat", "sun"].map((k) => `<button class="${f.wd.has(k) ? "on" : ""}" data-act="swd" data-k="${k}">${k[0].toUpperCase() + k.slice(1, 2)}</button>`).join("")}</div>`}
+          <h4>Time</h4>
+          <div class="wheels sm"><div class="band"></div>${col("h", Array.from({ length: 12 }, (_, k) => k + 1))}<span class="wl">:</span>${col("m", Array.from({ length: 12 }, (_, k) => String(k * 5).padStart(2, "0")))}${col("p", ["am", "pm"])}</div>
+        </div>
+        <div class="scol">
+          <h4>Do</h4>${seg("sact", [["on", "Turn on"], ["off", "Turn off"]], f.act)}
+          ${f.act === "on" ? `<div class="opts smodes">${modes.map((m) => `<button class="opt ${f.mode === m ? "on" : ""} m-${MODES[m].c}" data-act="smode" data-k="${m}">${icon(MODES[m].icon)}<span>${MODES[m].label}</span></button>`).join("")}</div>
+            ${showT ? `<div class="stemp"><button class="round" data-act="stminus">${icon("mdi:minus")}</button><b>${fmtT(f.temp, f.step)}<i>°</i></b><button class="round" data-act="stplus">${icon("mdi:plus")}</button></div>` : ""}` : `<p class="note">${icon("mdi:power-off")}The air conditioning will be switched off.</p>`}
+          <p class="ssum">${this._schedSummary(f)}</p>
+          <button class="bigbtn on wide" data-act="ssave">${icon("mdi:content-save-outline")}Save schedule</button>
+        </div>
+      </div></div>`;
+  }
   _cancelTimer(i) { this._call("quick_timer", "cancel_action", { task_id: this._taskId(i) }); }
   _toast(msg) {
     const t = this.shadowRoot.querySelector(".toast"); if (!t) return;
@@ -575,8 +684,9 @@ class WpClimate extends HTMLElement {
     const anim = this._animUntil > Date.now() ? " anim" : "";
     const html = `<style>${WP_PALETTE}${WP_CLIMATE_CSS}</style>
       <div class="wrap">${this._homeHtml(rooms)}<div class="rooms n${rooms.length}">${rooms.map((r) => this._roomHtml(r)).join("")}</div></div>
-      ${this._modal ? this._modalHtml(rooms).replace(/class="(scrim|sheet)/g, `class="$1${this._tsheet ? "" : anim}`) : ""}
-      ${this._tsheet ? this._timerSheet(this._tsheet.i).replace(/class="(scrim|sheet)/g, `class="$1${anim}`) : ""}<div class="toast"></div>`;
+      ${this._modal ? this._modalHtml(rooms).replace(/class="(scrim|sheet)/g, `class="$1${this._tsheet || this._ssheet ? "" : anim}`) : ""}
+      ${this._tsheet ? this._timerSheet(this._tsheet.i).replace(/class="(scrim|sheet)/g, `class="$1${anim}`) : ""}
+      ${this._ssheet ? this._schedSheet().replace(/class="(scrim|sheet)/g, `class="$1${anim}`) : ""}<div class="toast"></div>`;
     if (html === this._lastHtml) return; // nothing visible changed: keep the DOM (no flicker)
     this._lastHtml = html;
     const scrollY = this.shadowRoot.querySelector(".sheet .right")?.scrollTop;
@@ -725,7 +835,7 @@ class WpClimate extends HTMLElement {
           ${preset ? this._group("Preset", (preset.attributes.options || []).map((o) => ({ key: o, label: PRESET_LABEL[o] || o, on: preset.state === o })), "preset") : ""}
           ${extras.length ? `<div class="grp"><h4>Comfort features</h4><div class="opts">${extras.map(([e, s]) => `<button class="opt sw ${s.state === "on" ? "on" : ""}" data-act="extra" data-e="${e}">${icon(s.state === "on" ? "mdi:toggle-switch" : "mdi:toggle-switch-off-outline")}<span>${$esc((s.attributes.friendly_name || e).replace(r0.cfg.strip_name || /^.*AC /, ""))}</span></button>`).join("")}</div></div>` : ""}
           ${!all && !r0.full ? `<p class="note">${icon("mdi:information-outline")}Fan and air-direction controls appear here once this room is converted to ProtoART.</p>` : ""}
-          <button class="rowbtn sm" data-act="schedules">${icon("mdi:calendar-clock")}<span>Weekly schedules</span>${icon("mdi:chevron-right", "chev")}</button>
+          <button class="rowbtn sm" data-act="schedules" data-i="${all ? "all" : r0.i}">${icon("mdi:calendar-clock")}<span>Schedules</span>${icon("mdi:chevron-right", "chev")}</button>
         </div>
       </div>
     </div>`;
@@ -760,13 +870,14 @@ class WpClimate extends HTMLElement {
     const IH = 56;
     this._wheel ||= { h: 1, m: 0 };
     this.shadowRoot.querySelectorAll(".wheel").forEach((w) => {
-      const key = w.dataset.w; const max = key === "h" ? 23 : 59;
+      const store = w.dataset.store === "s" ? this._ssheet?.f : this._wheel; if (!store) return;
+      const key = w.dataset.w; const max = w.querySelectorAll(".wi").length - 1;
       const mark = (v) => w.querySelectorAll(".wi").forEach((it) => it.classList.toggle("sel", +it.dataset.v === v));
-      w.scrollTop = this._wheel[key] * IH; mark(this._wheel[key]);
+      w.scrollTop = (store[key] || 0) * IH; mark(store[key] || 0);
       let t;
       w.addEventListener("scroll", () => {
         const v = Math.max(0, Math.min(max, Math.round(w.scrollTop / IH)));
-        mark(v); clearTimeout(t); t = setTimeout(() => { this._wheel[key] = v; this._updStart(); }, 90);
+        mark(v); clearTimeout(t); t = setTimeout(() => { store[key] = v; this._updStart(); this._updSched(); }, 90);
       }, { passive: true });
       w.querySelectorAll(".wi").forEach((it) => it.addEventListener("click", () => w.scrollTo({ top: +it.dataset.v * IH, behavior: "smooth" })));
     });
@@ -820,7 +931,24 @@ class WpClimate extends HTMLElement {
         case "preset": this._call("select", "select_option", { entity_id: rooms[M.idx].preset, option: k }); break;
         case "extra": this._call("switch", "toggle", { entity_id: d.e }); break;
         case "tcancel": this._cancelTimer(i); this._tsheet = null; this._render(); setTimeout(() => this._render(), 600); break;
-        case "schedules": this._modal = null; this._render(); if (this._config.schedules_popup) navigate(`${location.pathname}${this._config.schedules_popup}`); break;
+        case "schedules": {
+          const scope = i == null ? "all" : i;
+          const only = scope === "all" && M?.kind === "all" ? [...M.sel] : null;
+          this._ssheet = { scope, only, view: "list" }; this._sdel = null; this._open({}); this._loadSched(); break;
+        }
+        case "sclose": this._ssheet = null; this._render(); break;
+        case "sadd": this._ssheet.view = "form"; this._ssheet.f = this._schedDefaults(); this._render(); break;
+        case "sback": this._ssheet.view = "list"; this._render(); break;
+        case "swhen": this._ssheet.f.when = k; this._render(); break;
+        case "sday": this._ssheet.f.day = k; this._render(); break;
+        case "swd": { const w = this._ssheet.f.wd; w.has(k) ? w.delete(k) : w.add(k); this._render(); break; }
+        case "sact": this._ssheet.f.act = k; this._render(); break;
+        case "smode": this._ssheet.f.mode = k; this._render(); break;
+        case "stminus": case "stplus": { const f = this._ssheet.f; f.temp = Math.max(16, Math.min(30, f.temp + (d.act === "stplus" ? 1 : -1) * f.step)); this._render(); break; }
+        case "sroom": { const r = this._ssheet.f.rooms; r.has(i) ? r.delete(i) : r.add(i); this._render(); break; }
+        case "ssave": this._saveSched(); break;
+        case "stoggle": this._call("switch", this._hass.states[d.e]?.state === "on" ? "turn_off" : "turn_on", { entity_id: d.e }); break;
+        case "sdel": if (this._sdel === d.e) { this._call("scheduler", "remove", { entity_id: d.e }); this._sdel = null; setTimeout(() => this._loadSched(), 500); } else { this._sdel = d.e; this._render(); } break;
       }
     }));
   }
@@ -920,6 +1048,33 @@ const WP_CLIMATE_CSS = `
   .wheel::-webkit-scrollbar { display: none; }
   .wi { height: 56px; line-height: 56px; text-align: center; font-size: 26px; color: var(--wp-muted); scroll-snap-align: center; cursor: pointer; font-variant-numeric: tabular-nums; }
   .wi.sel { color: var(--wp-text); font-size: 34px; font-weight: 700; }
+  .wheels.sm { height: 168px; margin: 0; } .wheels.sm .band { top: 56px; } .wheels.sm .wheel { height: 168px; padding: 56px 0; width: 80px; }
+  .wheels.sm .wl { font-size: 28px; font-weight: 700; color: var(--wp-muted); }
+  .sheet.ssheet { width: min(640px, 92vw); max-height: 90vh; padding-bottom: 0; } .sheet.ssheet.wide { width: min(940px, 95vw); }
+  .x.sm { width: 48px; height: 48px; } .x.sm ha-icon { --mdc-icon-size: 24px; }
+  .slist { overflow-y: auto; padding: 8px 20px; min-height: 120px; }
+  .srow { display:flex; align-items:center; gap: 14px; padding: 12px 4px; border-bottom: 1px solid var(--wp-border); } .srow:last-child { border-bottom: 0; } .srow.paused .stx, .srow.paused .sic { opacity: .45; }
+  .sic { width: 50px; height: 50px; flex: none; border-radius: 14px; display:grid; place-items:center; background: color-mix(in srgb, var(--mc) 18%, var(--wp-card-2)); } .sic ha-icon { --mdc-icon-size: 28px; color: var(--mc); }
+  .stx { flex: 1; min-width: 0; } .stx b { display:block; font-size: 20px; } .stx small { display:block; color: var(--wp-muted); font-size: 16px; margin-top: 2px; }
+  .tgl { all: unset; cursor: pointer; flex: none; width: 58px; height: 34px; border-radius: 999px; background: var(--wp-track); position: relative; transition: background .2s; }
+  .tgl i { position:absolute; top: 4px; left: 4px; width: 26px; height: 26px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.3); transition: left .2s; } .tgl.on { background: var(--wp-ok); } .tgl.on i { left: 28px; }
+  .sdel { all: unset; cursor: pointer; flex: none; display:flex; align-items:center; gap: 6px; height: 46px; min-width: 46px; justify-content: center; padding: 0 6px; border-radius: 14px; color: var(--wp-muted); font-weight: 700; font-size: 16px; }
+  .sdel ha-icon { --mdc-icon-size: 26px; } .sdel.arm { background: var(--wp-bad); color: #fff; padding: 0 14px; }
+  .sempty { display:flex; flex-direction:column; align-items:center; gap: 8px; color: var(--wp-muted); font-size: 19px; padding: 30px 0; margin: 0; } .sempty ha-icon { --mdc-icon-size: 40px; opacity: .6; }
+  .sfoot { padding: 0 20px 20px; } .sfoot .bigbtn.wide { margin-top: 8px; height: 66px; }
+  .ssheet .chips { padding: 14px 24px 0; }
+  .sform { display:grid; grid-template-columns: 1fr 1fr; gap: 26px; padding: 14px 24px 22px; overflow-y: auto; }
+  .scol { display:flex; flex-direction:column; gap: 12px; min-width: 0; } .scol h4 { margin: 4px 0 0; font-size: 15px; text-transform: uppercase; letter-spacing: .8px; color: var(--wp-muted); }
+  .seg { display:flex; gap: 6px; padding: 5px; border-radius: 18px; background: var(--wp-card-2); border: 1px solid var(--wp-border); }
+  .seg button { all: unset; cursor: pointer; flex: 1; text-align: center; padding: 14px 8px; border-radius: 14px; font-size: 19px; font-weight: 700; color: var(--wp-muted); }
+  .seg button.on { background: var(--wp-accent); color: #fff; box-shadow: var(--wp-glow); }
+  .wds { display:grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .wds button { all: unset; cursor: pointer; text-align: center; padding: 14px 0; border-radius: 14px; border: 1px solid var(--wp-border); background: var(--wp-card-2); font-weight: 700; font-size: 17px; color: var(--wp-muted); }
+  .wds button.on { border-color: var(--wp-accent); color: var(--wp-text); background: color-mix(in srgb, var(--wp-accent) 22%, var(--wp-card-2)); }
+  .smodes { grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); } .smodes .opt { min-height: 74px; }
+  .stemp { display:flex; align-items:center; justify-content:center; gap: 26px; } .stemp b { font-size: 52px; font-weight: 700; min-width: 110px; text-align: center; } .stemp b i { font-style: normal; font-size: 26px; color: var(--wp-muted); }
+  .ssum { margin: 2px 0 0; font-size: 18px; color: var(--wp-muted); } .ssum b { color: var(--wp-text); }
+  .scol .bigbtn.wide { margin-top: auto; height: 68px; }
   .wl { position: relative; font-size: 18px; font-weight: 600; width: 52px; }
   .tleft { text-align:center; padding: 26px 24px 4px; } .tleft b { display:block; font-size: 56px; color: var(--wp-warn); } .tleft span { color: var(--wp-muted); font-size: 18px; }
   .bigbtn[disabled] { opacity: .4; }

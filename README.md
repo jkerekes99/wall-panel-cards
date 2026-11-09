@@ -40,6 +40,9 @@ chips:
     group_by_area: true               # section the list by area
 ```
 
+## Climate schedules (wp-climate)
+The Schedules buttons open a built-in scheduler on top of the [Scheduler integration](https://github.com/nielsfaber/scheduler-component) (required): per-room or all-rooms lists with pause/delete, and a form for Once (today/tomorrow) or Repeat (weekdays) at a time, turning the AC off or on with a mode and temperature. One-off schedules delete themselves after running.
+
 ## Photos (optional)
 Images are not shipped in this repo; put your own under `/config/www/...` and reference them as `/local/...`.
 
