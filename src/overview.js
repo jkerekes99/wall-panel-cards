@@ -421,18 +421,18 @@ class WpCar extends WpBase {
   _ids() { const c = this._config; return [c.battery, c.range, c.charging, c.plugged, c.charger_power, c.location, c.lock, c.charge_limit, c.theme_entity]; }
   _render() {
     const h = this._hass, c = this._config;
-    const b = stateNum(h, c.battery), rng = stateNum(h, c.range), lim = stateNum(h, c.charge_limit);
+    const b = stateNum(h, c.battery), rng = stateNum(h, c.range);
     const charging = h.states[c.charging]?.state === "on", plugged = h.states[c.plugged]?.state === "on";
     const pw = stateNum(h, c.charger_power); const loc = h.states[c.location]?.state; const locked = h.states[c.lock]?.state === "locked";
     const col = b == null ? "var(--wp-faint)" : b < 20 ? "var(--wp-bad)" : b < 40 ? "var(--wp-warn)" : "var(--wp-ok)";
     const status = charging ? `Charging${pw ? ` · ${pw.toFixed(1)} kW` : ""}` : plugged ? "Plugged in" : "Not plugged in";
     this._setHtml(`<style>${WP_PALETTE}${WP_CAR_CSS}</style>
       <section class="card" data-go="${c.tap || ""}">
-        <div class="hd">${icon("mdi:car-electric")}<div><h2>${$esc(c.name || "Car")}</h2><small>${$esc(loc === "home" ? "Home" : loc === "not_home" ? "Away" : loc || "")}${c.lock ? ` · ${locked ? "Locked" : "Unlocked"}` : ""}</small></div></div>
+        <div class="hd">${icon("mdi:car-electric")}<div class="hdt"><h2>${$esc(c.name || "Car")}</h2><small>${$esc(loc === "home" ? "Home" : loc === "not_home" ? "Away" : loc || "")}${c.lock ? ` · ${locked ? "Locked" : "Unlocked"}` : ""}</small></div></div>
         ${c.image ? `<img class="carimg" src="${$esc(c.image)}" alt="">` : `<svg class="car" viewBox="0 0 200 66">${WP_CAR_PATH}</svg>`}
         <div class="bat"><b>${b == null ? "–" : Math.round(b)}<i>%</i></b>
-          <div class="bar"><span style="width:${b ?? 0}%;background:${col}"></span>${lim ? `<em style="left:${lim}%"></em>` : ""}</div>
-          <small>${rng == null ? "" : `${Math.round(rng)} km range`}${lim ? ` · limit ${Math.round(lim)}%` : ""}</small></div>
+          <div class="bar"><span style="width:${b ?? 0}%;background:${col}"></span></div>
+          <small>${rng == null ? "" : `${Math.round(rng)} km range`}</small></div>
         <span class="st ${charging ? "chg" : plugged ? "plug" : ""}">${icon(charging ? "mdi:lightning-bolt" : plugged ? "mdi:power-plug" : "mdi:power-plug-off-outline")}${status}</span>
         ${icon("mdi:chevron-right", "chev")}
       </section>`) && this.shadowRoot.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
@@ -442,16 +442,17 @@ const WP_CAR_PATH = `<path d="M6,46 C6,36 16,32 34,30 L64,16 C74,10 92,8 116,8 C
 const WP_CAR_CSS = `
   :host { display:block; } * { box-sizing:border-box; }
   :host([dark]) { --c-body:#e7ecf5; --c-glass:#1b2540; --c-tyre:#0b1120; --c-rim:#64748b; } :host(:not([dark])) { --c-body:#f1f5f9; --c-glass:#334155; --c-tyre:#1e293b; --c-rim:#94a3b8; }
-  .card { display:flex; align-items:center; gap: 22px; padding: 14px 20px; background: var(--wp-card); border:1px solid var(--wp-border); border-radius: var(--wp-radius); box-shadow: var(--wp-shadow); cursor:pointer; }
-  .hd { display:flex; gap: 12px; align-items:center; min-width: 170px; white-space: nowrap; } .hd > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); } h2 { margin:0; font-size: 21px; } .hd small { color: var(--wp-muted); font-size: 15px; }
+  .card { display:flex; align-items:center; gap: 18px; padding: 14px 18px 14px 20px; min-width: 0; overflow: hidden; background: var(--wp-card); border:1px solid var(--wp-border); border-radius: var(--wp-radius); box-shadow: var(--wp-shadow); cursor:pointer; }
+  .hd { display:flex; gap: 12px; align-items:center; flex: 0 1 210px; min-width: 120px; white-space: nowrap; }
+  .hdt { min-width: 0; } .hdt h2, .hdt small { display:block; overflow: hidden; text-overflow: ellipsis; } .hd > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); } h2 { margin:0; font-size: 21px; } .hd small { color: var(--wp-muted); font-size: 15px; }
   .car { width: 170px; height: 56px; flex:none; filter: drop-shadow(0 6px 10px rgba(0,0,0,.3)); }
   .carimg { height: 56px; width: auto; max-width: 175px; flex: none; object-fit: contain; margin: -6px 0; filter: drop-shadow(0 8px 10px rgba(0,0,0,.35)); }
-  .bat { flex:1; min-width: 260px; display:grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 16px; align-items:center; }
+  .bat { flex:1 1 auto; min-width: 190px; display:grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 16px; align-items:center; }
   .bat b { grid-row: span 2; font-size: 42px; font-weight: 600; } .bat b i { font-style:normal; font-size: 20px; color: var(--wp-muted); }
   .bar { position:relative; height: 12px; border-radius: 999px; background: var(--wp-track); } .bar span { position:absolute; left:0; top:0; bottom:0; border-radius: 999px; } .bar em { position:absolute; top:-4px; bottom:-4px; width: 2px; background: var(--wp-muted); }
   .bat small { color: var(--wp-muted); font-size: 15px; margin-top: 6px; white-space: nowrap; }
   .st { display:flex; align-items:center; gap: 6px; padding: 8px 14px; border-radius: 999px; background: var(--wp-card-2); border:1px solid var(--wp-border); font-weight: 700; font-size: 15px; color: var(--wp-muted); white-space: nowrap; }
-  .st ha-icon { --mdc-icon-size: 20px; } .st.chg { color: #06b6d4; border-color: #06b6d4; } .st.plug { color: var(--wp-ok); } .chev { color: var(--wp-muted); }
+  .st ha-icon { --mdc-icon-size: 20px; } .st.chg { color: #06b6d4; border-color: #06b6d4; } .st.plug { color: var(--wp-ok); } .st { flex: none; } .chev { color: var(--wp-muted); flex: none; margin-left: -6px; }
 `;
 customElements.define("wp-car", WpCar);
 window.customCards.push(
