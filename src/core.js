@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.4.0";
+const WP_VERSION = "0.5.0";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -19,7 +19,12 @@ function wpIsDark(hass, cfg) {
   return !!hass?.themes?.darkMode;
 }
 const agoLong = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "under a minute" : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`; };
-const icon = (name, cls = "") => `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
+// "lu:<name>" draws an embedded Lucide line icon (sized by --mdc-icon-size like ha-icon); anything else is an ha-icon (mdi:...).
+const icon = (name, cls = "") => {
+  if (typeof name === "string" && name.startsWith("lu:") && typeof WP_LUCIDE !== "undefined" && WP_LUCIDE[name.slice(3)])
+    return `<svg class="lu ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="var(--lu-stroke, 2)" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WP_LUCIDE[name.slice(3)]}</svg>`;
+  return `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
+};
 
 /* ---------- shared palette (inherits into every child card) ---------- */
 const WP_PALETTE = `
@@ -52,6 +57,7 @@ const WP_PALETTE = `
     --bubble-accent-color: var(--wp-accent); --bubble-border-radius: 18px;
     color: var(--wp-text);
   }
+  svg.lu { width: var(--mdc-icon-size, 24px); height: var(--mdc-icon-size, 24px); flex: none; display: inline-block; vertical-align: middle; }
 `;
 
 /* =====================================================================
@@ -66,12 +72,12 @@ const COND = {
   "windy-variant": ["mdi:weather-windy-variant", "Windy"],
 };
 const DEFAULT_TABS = [
-  { name: "Overview", icon: "mdi:home-variant", path: "overview" },
-  { name: "Climate", icon: "mdi:thermometer", path: "climate" },
-  { name: "Energy", icon: "mdi:lightning-bolt", path: "energy" },
-  { name: "Solar", icon: "mdi:solar-power-variant", path: "solar" },
-  { name: "Cars", icon: "mdi:car-electric", path: "cars" },
-  { name: "Security", icon: "mdi:shield-home", path: "security" },
+  { name: "Overview", icon: "lu:house", path: "overview" },
+  { name: "Climate", icon: "lu:thermometer", path: "climate" },
+  { name: "Energy", icon: "lu:zap", path: "energy" },
+  { name: "Solar", icon: "lu:sun", path: "solar" },
+  { name: "Cars", icon: "lu:car-front", path: "cars" },
+  { name: "Security", icon: "lu:shield", path: "security" },
 ];
 
 class WpPage extends HTMLElement {
@@ -240,11 +246,12 @@ const WP_PAGE_CSS = `
   :host { display:block; }
   .page { min-height: 100vh; box-sizing: border-box; background: var(--wp-bg); padding: 14px 18px 18px; display:flex; flex-direction:column; gap: 14px; }
   .bar { display:flex; align-items:center; gap: 12px; background: var(--wp-card); border: 1px solid var(--wp-border); border-radius: 20px; padding: 8px 10px; box-shadow: var(--wp-shadow); }
-  .tabs { display:flex; gap: 6px; flex: 1; overflow-x: auto; scrollbar-width: none; }
-  .tab { all: unset; cursor: pointer; display:flex; align-items:center; gap: 9px; padding: 12px 18px; border-radius: 14px; color: var(--wp-muted); font-size: 17px; font-weight: 600; white-space: nowrap; transition: background .2s, color .2s; }
-  .tab ha-icon { --mdc-icon-size: 22px; }
+  .tabs { display:flex; gap: 4px; flex: 1; overflow-x: auto; scrollbar-width: none; padding: 4px; margin: -4px; }
+  .tab { all: unset; cursor: pointer; display:flex; align-items:center; gap: 10px; padding: 12px 17px; border-radius: 16px; color: var(--wp-text); font-size: 17.5px; font-weight: 700; letter-spacing: -.005em; white-space: nowrap; transition: background .25s, box-shadow .25s; }
+  .tab ha-icon, .tab svg.lu { --mdc-icon-size: 23px; --lu-stroke: 2.1; }
   .tab:active { transform: scale(.97); }
-  .tab.on { background: var(--wp-accent); color: var(--wp-accent-text); box-shadow: var(--wp-glow); }
+  .tab.on { color: #fff; background: linear-gradient(180deg, #3d8bff 0%, #1f5fe6 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 1px rgba(96,165,250,.55), 0 6px 18px rgba(37,99,235,.45), 0 0 28px rgba(59,130,246,.35); }
   .right { display:flex; align-items:center; gap: 10px; padding-left: 10px; border-left: 1px solid var(--wp-border); }
   .wx { all: unset; cursor:pointer; display:flex; align-items:center; gap: 10px; padding: 6px 12px; border-radius: 14px; }
   .wx:active { background: var(--wp-card-hi); }
@@ -253,7 +260,7 @@ const WP_PAGE_CSS = `
   .wx small, .clock small { display:block; color: var(--wp-muted); font-size: 13px; }
   .clock { text-align: right; padding: 0 8px; min-width: 104px; }
   .clock b { font-size: 24px; }
-  .chips { display:flex; gap: 8px; flex: none; }
+  .chips { display:flex; gap: 8px; flex: none; margin-left: 6px; }
   .chip { all: unset; cursor: pointer; display:flex; align-items:center; gap: 7px; height: 46px; padding: 0 14px 0 12px; border-radius: 14px; background: color-mix(in srgb, var(--chip) 16%, transparent); color: var(--wp-text); font-size: 19px; font-weight: 700; transition: opacity .2s, background .2s; }
   .chip ha-icon { --mdc-icon-size: 24px; color: var(--chip); }
   .chip.zero { background: var(--wp-card-2); opacity: .5; } .chip.zero ha-icon { color: var(--wp-muted); }

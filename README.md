@@ -33,9 +33,12 @@ chips:
 ## Photos (optional)
 Images are not shipped in this repo; put your own under `/config/www/...` and reference them as `/local/...`.
 
-- `wp-power-flow`: `image: {light: /local/..., dark: /local/..., aspect: 1.777}`. Optional `nodes` (`solar`, `grid`, `home`, `ev` as `[x%, y%]` on the photo) and `labels` (same keys, label box position) place the flow lines. Without `image` the built-in illustration is used.
+- `wp-power-flow`: `image: {light, dark, car_light, car_dark, aspect, focus_y}` (paths under `/local/...`). With `car_plugged: binary_sensor...` the `car_*` photos and the EV flow show only while the car is plugged in (cross-fade); `focus_y` (0–100) picks which part of a cropped photo stays in view. Optional `nodes` (`solar`, `grid`, `home`, `ev` as `[x%, y%]` on the photo) and `labels` (same keys, label box position) place the flow lines. Without `image` the built-in illustration is used.
 - `wp-car`: `image: /local/...` (transparent PNG, side profile).
 - `wp-side`: `heat_pump_image: /local/...` shows a banner in the climate section; `climate_title` overrides "Climate & Heat Pumps".
 
 ## Build
 `python3 tools/build.py` concatenates `src/*.js` into `dist/wall-panel-cards.js`.
+
+## Icons
+`icon:` values may use `lu:<name>` for the embedded Lucide line icons (see `src/icons.js`; regenerate with `tools/gen_icons.py`). Lucide is ISC-licensed, see `LICENSE-lucide`.

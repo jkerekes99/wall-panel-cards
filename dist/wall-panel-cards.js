@@ -1,6 +1,36 @@
+/* Lucide icons (https://lucide.dev), ISC License, Copyright (c) Lucide Contributors 2022; portions Feather (MIT) Cole Bemis 2013-2022. */
+const WP_LUCIDE = {
+"house": "<path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\" /><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\" />",
+"thermometer": "<path d=\"M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z\" />",
+"zap": "<path d=\"M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z\" />",
+"sun": "<circle cx=\"12\" cy=\"12\" r=\"4\" /><path d=\"M12 2v2\" /><path d=\"M12 20v2\" /><path d=\"m4.93 4.93 1.41 1.41\" /><path d=\"m17.66 17.66 1.41 1.41\" /><path d=\"M2 12h2\" /><path d=\"M20 12h2\" /><path d=\"m6.34 17.66-1.41 1.41\" /><path d=\"m19.07 4.93-1.41 1.41\" />",
+"car-front": "<path d=\"m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.4a2 2 0 0 0-1.903 1.257L5 10 3 8\" /><path d=\"M7 14h.01\" /><path d=\"M17 14h.01\" /><rect width=\"18\" height=\"8\" x=\"3\" y=\"10\" rx=\"2\" /><path d=\"M5 18v2\" /><path d=\"M19 18v2\" />",
+"shield": "<path d=\"M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z\" />",
+"droplet": "<path d=\"M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z\" />",
+"calendar-days": "<path d=\"M8 2v4\" /><path d=\"M16 2v4\" /><rect width=\"18\" height=\"18\" x=\"3\" y=\"4\" rx=\"2\" /><path d=\"M3 10h18\" /><path d=\"M8 14h.01\" /><path d=\"M12 14h.01\" /><path d=\"M16 14h.01\" /><path d=\"M8 18h.01\" /><path d=\"M12 18h.01\" /><path d=\"M16 18h.01\" />",
+"utility-pole": "<path d=\"M12 2v20\" /><path d=\"M2 5h20\" /><path d=\"M3 3v2\" /><path d=\"M7 3v2\" /><path d=\"M17 3v2\" /><path d=\"M21 3v2\" /><path d=\"m19 5-7 7-7-7\" />",
+"arrow-down": "<path d=\"M12 5v14\" /><path d=\"m19 12-7 7-7-7\" />",
+"arrow-up": "<path d=\"m5 12 7-7 7 7\" /><path d=\"M12 19V5\" />",
+"lightbulb": "<path d=\"M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5\" /><path d=\"M9 18h6\" /><path d=\"M10 22h4\" />",
+"fan": "<path d=\"M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z\" /><path d=\"M12 12v.01\" />",
+"door-open": "<path d=\"M13 4h3a2 2 0 0 1 2 2v14\" /><path d=\"M2 20h3\" /><path d=\"M13 20h9\" /><path d=\"M10 12v.01\" /><path d=\"M13 4.562v16.157a1 1 0 0 1-1.242.97L5 20V5.562a2 2 0 0 1 1.515-1.94l4-1A2 2 0 0 1 13 4.561Z\" />",
+"plug-zap": "<path d=\"M6.3 20.3a2.4 2.4 0 0 0 3.4 0L12 18l-6-6-2.3 2.3a2.4 2.4 0 0 0 0 3.4Z\" /><path d=\"m2 22 3-3\" /><path d=\"M7.5 13.5 10 11\" /><path d=\"M10.5 16.5 13 14\" /><path d=\"m18 3-4 4h6l-4 4\" />",
+"battery-charging": "<path d=\"M15 7h1a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-2\" /><path d=\"M6 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h1\" /><path d=\"m11 7-3 5h4l-3 5\" /><line x1=\"22\" x2=\"22\" y1=\"11\" y2=\"13\" />",
+"map-pin": "<path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\" /><circle cx=\"12\" cy=\"10\" r=\"3\" />",
+"chevron-right": "<path d=\"m9 18 6-6-6-6\" />",
+"flame": "<path d=\"M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z\" />",
+"snowflake": "<line x1=\"2\" x2=\"22\" y1=\"12\" y2=\"12\" /><line x1=\"12\" x2=\"12\" y1=\"2\" y2=\"22\" /><path d=\"m20 16-4-4 4-4\" /><path d=\"m4 8 4 4-4 4\" /><path d=\"m16 4-4 4-4-4\" /><path d=\"m8 20 4-4 4 4\" />",
+"power": "<path d=\"M12 2v10\" /><path d=\"M18.4 6.6a9 9 0 1 1-12.77.04\" />",
+"timer": "<line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\" /><line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\" /><circle cx=\"12\" cy=\"14\" r=\"8\" />",
+"calendar-clock": "<path d=\"M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5\" /><path d=\"M16 2v4\" /><path d=\"M8 2v4\" /><path d=\"M3 10h5\" /><path d=\"M17.5 17.5 16 16.3V14\" /><circle cx=\"16\" cy=\"16\" r=\"6\" />",
+"sliders-horizontal": "<line x1=\"21\" x2=\"14\" y1=\"4\" y2=\"4\" /><line x1=\"10\" x2=\"3\" y1=\"4\" y2=\"4\" /><line x1=\"21\" x2=\"12\" y1=\"12\" y2=\"12\" /><line x1=\"8\" x2=\"3\" y1=\"12\" y2=\"12\" /><line x1=\"21\" x2=\"16\" y1=\"20\" y2=\"20\" /><line x1=\"12\" x2=\"3\" y1=\"20\" y2=\"20\" /><line x1=\"14\" x2=\"14\" y1=\"2\" y2=\"6\" /><line x1=\"8\" x2=\"8\" y1=\"10\" y2=\"14\" /><line x1=\"16\" x2=\"16\" y1=\"18\" y2=\"22\" />",
+"wind": "<path d=\"M12.8 19.6A2 2 0 1 0 14 16H2\" /><path d=\"M17.5 8a2.5 2.5 0 1 1 2 4H2\" /><path d=\"M9.8 4.4A2 2 0 1 1 11 8H2\" />",
+"tv": "<rect width=\"20\" height=\"15\" x=\"2\" y=\"7\" rx=\"2\" ry=\"2\" /><polyline points=\"17 2 12 7 7 2\" />"
+};
+
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.4.0";
+const WP_VERSION = "0.5.0";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -19,7 +49,12 @@ function wpIsDark(hass, cfg) {
   return !!hass?.themes?.darkMode;
 }
 const agoLong = (iso) => { const m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); return m < 1 ? "under a minute" : m < 60 ? `${m} min` : m < 1440 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${Math.floor(m / 1440)}d`; };
-const icon = (name, cls = "") => `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
+// "lu:<name>" draws an embedded Lucide line icon (sized by --mdc-icon-size like ha-icon); anything else is an ha-icon (mdi:...).
+const icon = (name, cls = "") => {
+  if (typeof name === "string" && name.startsWith("lu:") && typeof WP_LUCIDE !== "undefined" && WP_LUCIDE[name.slice(3)])
+    return `<svg class="lu ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="var(--lu-stroke, 2)" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${WP_LUCIDE[name.slice(3)]}</svg>`;
+  return `<ha-icon class="${cls}" icon="${name}"></ha-icon>`;
+};
 
 /* ---------- shared palette (inherits into every child card) ---------- */
 const WP_PALETTE = `
@@ -52,6 +87,7 @@ const WP_PALETTE = `
     --bubble-accent-color: var(--wp-accent); --bubble-border-radius: 18px;
     color: var(--wp-text);
   }
+  svg.lu { width: var(--mdc-icon-size, 24px); height: var(--mdc-icon-size, 24px); flex: none; display: inline-block; vertical-align: middle; }
 `;
 
 /* =====================================================================
@@ -66,12 +102,12 @@ const COND = {
   "windy-variant": ["mdi:weather-windy-variant", "Windy"],
 };
 const DEFAULT_TABS = [
-  { name: "Overview", icon: "mdi:home-variant", path: "overview" },
-  { name: "Climate", icon: "mdi:thermometer", path: "climate" },
-  { name: "Energy", icon: "mdi:lightning-bolt", path: "energy" },
-  { name: "Solar", icon: "mdi:solar-power-variant", path: "solar" },
-  { name: "Cars", icon: "mdi:car-electric", path: "cars" },
-  { name: "Security", icon: "mdi:shield-home", path: "security" },
+  { name: "Overview", icon: "lu:house", path: "overview" },
+  { name: "Climate", icon: "lu:thermometer", path: "climate" },
+  { name: "Energy", icon: "lu:zap", path: "energy" },
+  { name: "Solar", icon: "lu:sun", path: "solar" },
+  { name: "Cars", icon: "lu:car-front", path: "cars" },
+  { name: "Security", icon: "lu:shield", path: "security" },
 ];
 
 class WpPage extends HTMLElement {
@@ -240,11 +276,12 @@ const WP_PAGE_CSS = `
   :host { display:block; }
   .page { min-height: 100vh; box-sizing: border-box; background: var(--wp-bg); padding: 14px 18px 18px; display:flex; flex-direction:column; gap: 14px; }
   .bar { display:flex; align-items:center; gap: 12px; background: var(--wp-card); border: 1px solid var(--wp-border); border-radius: 20px; padding: 8px 10px; box-shadow: var(--wp-shadow); }
-  .tabs { display:flex; gap: 6px; flex: 1; overflow-x: auto; scrollbar-width: none; }
-  .tab { all: unset; cursor: pointer; display:flex; align-items:center; gap: 9px; padding: 12px 18px; border-radius: 14px; color: var(--wp-muted); font-size: 17px; font-weight: 600; white-space: nowrap; transition: background .2s, color .2s; }
-  .tab ha-icon { --mdc-icon-size: 22px; }
+  .tabs { display:flex; gap: 4px; flex: 1; overflow-x: auto; scrollbar-width: none; padding: 4px; margin: -4px; }
+  .tab { all: unset; cursor: pointer; display:flex; align-items:center; gap: 10px; padding: 12px 17px; border-radius: 16px; color: var(--wp-text); font-size: 17.5px; font-weight: 700; letter-spacing: -.005em; white-space: nowrap; transition: background .25s, box-shadow .25s; }
+  .tab ha-icon, .tab svg.lu { --mdc-icon-size: 23px; --lu-stroke: 2.1; }
   .tab:active { transform: scale(.97); }
-  .tab.on { background: var(--wp-accent); color: var(--wp-accent-text); box-shadow: var(--wp-glow); }
+  .tab.on { color: #fff; background: linear-gradient(180deg, #3d8bff 0%, #1f5fe6 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 0 0 1px rgba(96,165,250,.55), 0 6px 18px rgba(37,99,235,.45), 0 0 28px rgba(59,130,246,.35); }
   .right { display:flex; align-items:center; gap: 10px; padding-left: 10px; border-left: 1px solid var(--wp-border); }
   .wx { all: unset; cursor:pointer; display:flex; align-items:center; gap: 10px; padding: 6px 12px; border-radius: 14px; }
   .wx:active { background: var(--wp-card-hi); }
@@ -253,7 +290,7 @@ const WP_PAGE_CSS = `
   .wx small, .clock small { display:block; color: var(--wp-muted); font-size: 13px; }
   .clock { text-align: right; padding: 0 8px; min-width: 104px; }
   .clock b { font-size: 24px; }
-  .chips { display:flex; gap: 8px; flex: none; }
+  .chips { display:flex; gap: 8px; flex: none; margin-left: 6px; }
   .chip { all: unset; cursor: pointer; display:flex; align-items:center; gap: 7px; height: 46px; padding: 0 14px 0 12px; border-radius: 14px; background: color-mix(in srgb, var(--chip) 16%, transparent); color: var(--wp-text); font-size: 19px; font-weight: 700; transition: opacity .2s, background .2s; }
   .chip ha-icon { --mdc-icon-size: 24px; color: var(--chip); }
   .chip.zero { background: var(--wp-card-2); opacity: .5; } .chip.zero ha-icon { color: var(--wp-muted); }
@@ -898,7 +935,7 @@ class WpPowerFlow extends WpBase {
     const t = arr.t.slice(0, hr + 1).reduce((a, v) => a + v, 0); const y = arr.y.slice(0, hr).reduce((a, v) => a + v, 0) + arr.y[hr] * frac;
     if (y < 0.2) return "";
     const p = Math.round(((t - y) / y) * 100);
-    return `<span class="vs ${p > 0 ? "up" : "down"}">${icon(p > 0 ? "mdi:arrow-up" : "mdi:arrow-down")}${Math.abs(p)}%<small>vs yesterday</small></span>`;
+    return `<span class="side vs"><b>${icon(p > 0 ? "lu:arrow-up" : "lu:arrow-down")}${Math.abs(p)}%</b><small>vs yesterday</small></span>`;
   }
   _geom() {
     const c = this._config;
@@ -923,8 +960,8 @@ class WpPowerFlow extends WpBase {
       const el = this.shadowRoot.getElementById(`l-${k}`); if (!el) continue;
       const q = (c.labels || {})[k]; if (!q) continue;
       const lw = (el.offsetWidth / v.sw) * 100, lh = (el.offsetHeight / v.sh) * 100, pad = 2;
-      el.style.left = `${Math.min(Math.max(q[0], v.x + pad), 100 - v.x - lw - pad)}%`;
-      el.style.top = `${Math.min(Math.max(q[1], v.y + pad), 100 - v.y - lh - pad)}%`;
+      el.style.left = `${Math.min(Math.max(q[0], v.x0 + pad), 100 - v.x1 - lw - pad)}%`;
+      el.style.top = `${Math.min(Math.max(q[1], v.y0 + pad), 100 - v.y1 - lh - pad)}%`;
     }
   }
   _render() {
@@ -935,12 +972,14 @@ class WpPowerFlow extends WpBase {
     const skelKey = `${G.photo}|${dark}|${night}|${G.vb}`;
     if (this._skelKey !== skelKey) {
       this._skelKey = skelKey; this._parts = {};
-      const img = G.photo ? (dark ? c.image.dark || c.image.light : c.image.light || c.image.dark) : null;
+      const pick = (a, b) => (dark ? a || b : b || a);
+      const img = G.photo ? pick(c.image.dark, c.image.light) : null;
+      const imgCar = G.photo ? pick(c.image.car_dark, c.image.car_light) : null;
       const lp = (k, d) => { const q = (c.labels || {})[k] || d; return `left:${q[0]}%;top:${q[1]}%`; };
       r.innerHTML = `<style>${WP_PALETTE}${WP_FLOW_CSS}</style>
       <section class="card">
         <header><div class="ttl">${icon("mdi:home-lightning-bolt-outline")}<div><h2>Live Power Flow</h2><p id="sub"></p></div></div><div class="chips" id="chips"></div></header>
-        <div class="scene ${G.photo ? "photo" : ""}" data-go="${c.tap || ""}">${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">` : ""}<div class="stage ${G.photo ? "photo" : ""}">
+        <div class="scene ${G.photo ? "photo" : ""}" data-go="${c.tap || ""}">${G.photo ? `<img class="ph" src="${$esc(img)}" alt="">${imgCar ? `<img class="ph car" src="${$esc(imgCar)}" alt="">` : ""}` : ""}<div class="stage ${G.photo ? "photo" : ""}">
           ${G.photo ? "" : WP_HOUSE_SVG(night)}
           <svg class="flows" viewBox="${G.vb}" preserveAspectRatio="none"><g id="fl"></g>
             <circle cx="${G.home[0]}" cy="${G.home[1]}" r="34" class="hub"/><foreignObject x="${G.home[0] - 24}" y="${G.home[1] - 24}" width="48" height="48"><div class="hubi">${icon("mdi:home")}</div></foreignObject></svg>
@@ -956,8 +995,11 @@ class WpPowerFlow extends WpBase {
       const fit = () => {
         const w = sc.clientWidth, hh = sc.clientHeight; if (!w || !hh) return;
         const sw = G.photo ? Math.max(w, hh * G.ratio) : Math.min(w, hh * G.ratio), sh = sw / G.ratio;
-        stg.style.width = `${sw}px`; stg.style.height = `${sh}px`;
-        this._vis = { x: ((sw - w) / 2 / sw) * 100, y: ((sh - hh) / 2 / sh) * 100, sw, sh };
+        const fy = G.photo ? (c.image.focus_y ?? 50) / 100 : 0.5;   // which part of a cropped photo stays in view (0 = top, 100 = bottom)
+        const left = (w - sw) / 2, top = (hh - sh) * fy;
+        Object.assign(stg.style, { width: `${sw}px`, height: `${sh}px`, left: `${left}px`, top: `${top}px`, transform: "none" });
+        sc.querySelectorAll(".ph").forEach((im) => { im.style.objectPosition = `50% ${fy * 100}%`; });
+        this._vis = { x0: (-left / sw) * 100, x1: ((sw - w + left) / sw) * 100, y0: (-top / sh) * 100, y1: ((sh - hh + top) / sh) * 100, sw, sh };
         this._clampLabels();
       };
       this._ro?.disconnect(); this._ro = new ResizeObserver(fit); this._ro.observe(sc); fit();
@@ -966,27 +1008,35 @@ class WpPowerFlow extends WpBase {
     const solar = Math.max(0, stateNum(h, c.solar) ?? 0), imp = Math.max(0, stateNum(h, c.grid_import) ?? 0), exp = Math.max(0, stateNum(h, c.grid_export) ?? 0);
     const home = stateNum(h, c.home) ?? Math.max(0, solar + imp - exp), ev = Math.max(0, stateNum(h, c.ev) ?? 0);
     const gridW = imp > 20 ? imp : exp > 20 ? -exp : 0;
+    // car_plugged: show the car photo and the EV flow only while the car is plugged in (or while it is drawing power)
+    const carHere = !c.car_plugged || h.states[c.car_plugged]?.state === "on" || ev > 50;
+    r.querySelector(".scene")?.classList.toggle("withcar", carHere);
     set("sub", [solar > 50 ? "Generating" : null, "Powering home", ev > 50 ? "Charging car" : null, exp > 20 ? "Exporting" : imp > 20 ? "Importing" : null].filter(Boolean).join("  →  "));
     set("chips", `<span class="chip ${gridW > 0 ? "warn" : "ok"}"><i></i>${gridW > 0 ? "Using grid" : gridW < 0 ? "Exporting" : "Self-powered"}</span><span class="chip ok live"><i></i>Live</span>`);
     // flows: only rebuilt when direction or speed band changes, so the animation doesn't restart on every sensor update
     const band = (w) => (w > 20 ? Math.max(0.9, Math.min(6, 4.5 / Math.sqrt(Math.max(w, 30) / 1000))).toFixed(1) : "0");
     const flow = (path, w, color, reverse) => { const d = band(w); return d === "0" ? `<path d="${path}" class="fl idle"/>` : `<path d="${path}" class="fl" style="stroke:${color}"/>${[0, 1, 2].map((k) => `<circle r="6" fill="${color}" class="dot"><animateMotion dur="${d}s" begin="-${((k * d) / 3).toFixed(2)}s" repeatCount="indefinite" path="${path}" ${reverse ? 'keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ""}/></circle>`).join("")}`; };
-    set("fl", flow(G.paths.solar, solar, "#fbbf24") + flow(G.paths.grid, Math.abs(gridW), gridW >= 0 ? "#a78bfa" : "#22c55e", gridW < 0) + flow(G.paths.ev, ev, "#22d3ee"));
+    set("fl", flow(G.paths.solar, solar, "#fbbf24") + flow(G.paths.grid, Math.abs(gridW), gridW >= 0 ? "#a78bfa" : "#22c55e", gridW < 0) + (carHere ? flow(G.paths.ev, ev, "#22d3ee") : ""));
     set("l-solar", `<small>Solar</small><b>${kW(solar)} <i>kW</i></b><em class="${solar > 50 ? "y" : ""}">${solar > 50 ? "Generating" : night ? "Night" : "Inactive"}</em>`);
     set("l-grid", `<small>Grid</small><b>${kW(Math.abs(gridW))} <i>kW</i></b><em class="${gridW > 0 ? "p" : gridW < 0 ? "g" : ""}">${gridW > 0 ? "Importing" : gridW < 0 ? "Exporting" : "Idle"}</em>`);
     set("l-home", `<small>Home use</small><b>${kW(home)} <i>kW</i></b>`);
-    set("l-ev", `<small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em>`);
+    set("l-ev", carHere ? `<small>${$esc(c.ev_name || "Car")}</small><b>${kW(ev)} <i>kW</i></b><em class="${ev > 50 ? "c" : ""}">${ev > 50 ? "Charging" : "Not charging"}</em>` : "");
     this._clampLabels();
     const sx = c.stats || {};
     const genT = stateNum(h, sx.generation), impT = stateNum(h, sx.import), expT = stateNum(h, sx.export);
     const homeT = genT != null && impT != null && expT != null ? Math.max(0, genT + impT - expT) : null;
     const costT = st?.c ? st.c.t.reduce((a, v) => a + v, 0) : null;
     const rate = sx.export_rate ?? 0.05;
+    const yr = new Date().getFullYear();
     set("tiles", `
-        <div class="tile">${icon("mdi:white-balance-sunny", "ti y")}<div><small>Solar today</small><b>${kWh(genT)}<i> kWh</i></b>${st?.yearSolar != null ? `<p>${new Date().getFullYear()}: <strong>${kWh(st.yearSolar)}</strong> kWh</p>` : ""}${st ? this._bars(st.g.t, "#fbbf24") : ""}</div></div>
-        <div class="tile">${icon("mdi:home-outline", "ti b")}<div><small>Home today</small><b>${kWh(homeT)}<i> kWh</i></b>${st ? this._vsY(st.home) : ""}${st ? this._bars(st.home.t, "#38bdf8") : ""}</div></div>
-        <div class="tile">${icon("mdi:transmission-tower-export", "ti g")}<div><small>Exported today</small><b>${kWh(expT)}<i> kWh</i></b><p class="money g">+${aud((expT || 0) * rate)} earned</p>${st ? this._bars(st.e.t, "#22c55e") : ""}</div></div>
-        <div class="tile">${icon("mdi:transmission-tower-import", "ti p")}<div><small>Imported today</small><b>${kWh(impT)}<i> kWh</i></b><p class="money">${costT != null ? `${aud(costT)} cost` : ""}</p>${st ? this._bars(st.i.t, "#a78bfa") : ""}</div></div>`);
+        <div class="tile"><div class="th">${icon("lu:sun", "ti y")}<div><h4>Solar Today</h4><b>${kWh(genT)}<i> kWh</i></b></div></div>
+          ${st?.yearSolar != null ? `<div class="tf yr">${icon("lu:calendar-days", "ti2")}<div><small>${yr} Total</small><b>${kWh(st.yearSolar)}<i> kWh</i></b></div></div>` : st ? `<div class="tf">${this._bars(st.g.t, "#fbbf24")}</div>` : ""}</div>
+        <div class="tile"><div class="th">${icon("lu:house", "ti b")}<div><h4>Home Today</h4><b>${kWh(homeT)}<i> kWh</i></b></div></div>
+          <div class="tf">${st ? this._bars(st.home.t, "#38bdf8") : ""}${st ? this._vsY(st.home) : ""}</div></div>
+        <div class="tile"><div class="th">${icon("lu:utility-pole", "ti g")}<div><h4>Exported Today</h4><b>${kWh(expT)}<i> kWh</i></b><p class="money g">+${aud((expT || 0) * rate)} earned</p></div></div>
+          <div class="tf">${st ? this._bars(st.e.t, "#22c55e") : ""}</div></div>
+        <div class="tile"><div class="th">${icon("lu:arrow-down", "ti p")}<div><h4>Imported Today</h4><b>${kWh(impT)}<i> kWh</i></b></div></div>
+          <div class="tf">${st ? this._bars(st.i.t, "#a78bfa") : ""}${costT != null ? `<span class="side"><b>${aud(costT)}</b><small>cost</small></span>` : ""}</div></div>`);
   }
 }
 function WP_HOUSE_SVG(night) {
@@ -1047,18 +1097,23 @@ const WP_FLOW_CSS = `
   .lbl small { display:block; color: var(--wp-muted); font-size: 14px; } .lbl b { display:block; font-size: 26px; line-height: 1.15; } .lbl b i { font-style: normal; font-size: 16px; color: var(--wp-muted); }
   .lbl em { display:block; font-style:normal; font-size: 14px; font-weight: 700; color: var(--wp-muted); } .lbl em.y { color: #f59e0b; } .lbl em.p { color: #a78bfa; } .lbl em.g { color: #22c55e; } .lbl em.c { color: #06b6d4; }
   .stage:not(.photo) #l-solar { left: 17.5%; top: 2%; } .stage:not(.photo) #l-grid { left: 70%; top: 6%; } .stage:not(.photo) #l-home { left: 55.5%; top: 77%; } .stage:not(.photo) #l-ev { left: 3%; top: 40%; }
-  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; object-position: 50% 50%;
-    -webkit-mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 88%, transparent);
-    -webkit-mask-composite: source-in; mask-image: linear-gradient(to right, transparent, #000 9%, #000 91%, transparent), linear-gradient(to bottom, transparent, #000 10%, #000 88%, transparent); mask-composite: intersect; }
+  .ph { position:absolute; inset:0; width:100%; height:100%; object-fit: cover; object-position: 50% 50%; transition: opacity .9s ease;
+    -webkit-mask-image: linear-gradient(to bottom, transparent, #000 11%, #000 86%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 11%, #000 86%, transparent); }
+  .ph.car { opacity: 0; } .withcar .ph.car { opacity: 1; }
   .lbl:empty { display:none; }
-  .tiles { display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-  .tile { display:flex; gap: 10px; padding: 12px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width: 0; }
-  .tile > div { flex:1; min-width:0; } .ti { --mdc-icon-size: 26px; flex:none; } .ti.y { color:#f59e0b; } .ti.b { color:#38bdf8; } .ti.g { color:#22c55e; } .ti.p { color:#a78bfa; }
-  .tile small { display:block; color: var(--wp-muted); font-size: 14px; } .tile b { display:block; font-size: 24px; line-height: 1.2; } .tile b i { font-style:normal; font-size: 15px; color: var(--wp-muted); }
-  .tile p { margin: 0; font-size: 13px; color: var(--wp-muted); white-space: nowrap; overflow:hidden; text-overflow: ellipsis; } .tile p strong { color: var(--wp-text); }
-  .money { font-weight: 700; } .money.g { color: #22c55e !important; }
-  .vs { display:flex; align-items:center; gap: 2px; font-size: 13px; font-weight: 700; } .vs ha-icon { --mdc-icon-size: 14px; } .vs.up { color: #f59e0b; } .vs.down { color: #22c55e; } .vs small { color: var(--wp-muted); font-weight: 500; margin-left: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .bars { width: 100%; height: 26px; margin-top: 6px; display:block; }
+  .tiles { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .tile { display:flex; flex-direction:column; justify-content:space-between; gap: 10px; padding: 13px 14px 12px; border-radius: 18px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width: 0; }
+  .th { display:flex; align-items:center; gap: 11px; min-width: 0; } .th > div { min-width: 0; }
+  .ti { --mdc-icon-size: 34px; --lu-stroke: 1.7; flex:none; } .ti.y { color:#fbbf24; } .ti.b { color:#38bdf8; } .ti.g { color:#22c55e; } .ti.p { color:#a78bfa; }
+  .th h4 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .th b { display:block; font-size: 27px; font-weight: 800; line-height: 1.15; white-space: nowrap; letter-spacing: -.01em; } .th b i { font-style: normal; font-size: 19px; font-weight: 700; }
+  .money { margin: 1px 0 0; font-size: 14px; font-weight: 700; color: var(--wp-muted); } .money.g { color: #22c55e; }
+  .tf { display:flex; align-items:flex-end; gap: 10px; min-width: 0; }
+  .tf.yr { align-items:center; gap: 14px; border-top: 1px solid var(--wp-border); padding-top: 10px; }
+  .ti2 { --mdc-icon-size: 30px; --lu-stroke: 1.7; color: #60a5fa; margin: 0 4px; } .tf.yr small { display:block; font-size: 14px; font-weight: 600; } .tf.yr b { display:block; font-size: 22px; font-weight: 800; line-height: 1.15; } .tf.yr b i { font-style:normal; font-size: 15px; font-weight: 700; color: var(--wp-muted); }
+  .side { flex: none; display:flex; flex-direction:column; align-items:flex-end; text-align: right; } .side b { display:flex; align-items:center; gap: 2px; font-size: 16px; font-weight: 800; } .side small { font-size: 13px; color: var(--wp-muted); white-space: nowrap; }
+  .vs b { color: #2dd4bf; } .vs svg.lu { --mdc-icon-size: 16px; --lu-stroke: 2.6; }
+  .bars { flex: 1; min-width: 0; width: 100%; height: 40px; display:block; }
 `;
 if (!customElements.get("wp-power-flow")) customElements.define("wp-power-flow", WpPowerFlow);
 
@@ -1092,11 +1147,11 @@ class WpSide extends WpBase {
     const hw = c.hot_water || {};
     const hwT = num(h.states[hw.temperature]?.state), hwMode = h.states[hw.mode]?.state, hwOn = h.states[hw.switch]?.state === "on", hwP = num(h.states[hw.power]?.state);
     return `<section class="card clim" data-go="${c.climate_path || ""}">
-      <header><div class="ttl">${icon("mdi:thermometer")}<h2>${$esc(c.climate_title || "Climate & Heat Pumps")}</h2></div>${icon("mdi:chevron-right", "chev")}</header>
+      <header><div class="ttl">${icon("lu:thermometer")}<h2>${$esc(c.climate_title || "Climate & Heat Pumps")}</h2></div>${icon("mdi:chevron-right", "chev")}</header>
       ${c.heat_pump_image ? `<div class="hp ${c.heat_pump_style === "photo" ? "photo" : ""}" style="${c.heat_pump_height ? `height:${+c.heat_pump_height}px;` : ""}${c.heat_pump_aspect ? `--hp-ar:${+c.heat_pump_aspect};` : ""}"><img src="${$esc(c.heat_pump_image)}" alt=""></div>` : ""}
       <div class="cl-top">
-        <div class="ct"><div class="mini">${icon("mdi:home-thermometer-outline")}House</div><b>${fmt1(avg)}<i>°C</i></b><small>${sum}</small></div>
-        ${c.hot_water ? `<div class="ct hw ${hwOn ? "run" : ""}"><div class="mini">${icon("mdi:water-boiler")}Hot water</div><b>${hwT == null ? "–" : Math.round(hwT)}<i>°C</i></b><small>${hwOn ? `Heating${hwP > 20 ? ` · ${(hwP / 1000).toFixed(1)} kW` : ""}` : "Idle"}${hwMode ? ` · ${$esc(hwMode)}` : ""}</small></div>` : ""}
+        <div class="ct">${icon("lu:thermometer", "cti h")}<div><h4>House Temperature</h4><b>${fmt1(avg)}<i> °C</i></b><small>${sum}</small></div></div>
+        ${c.hot_water ? `<div class="ct hw ${hwOn ? "run" : ""}">${icon("lu:droplet", "cti w")}<div><h4>Hot Water Temperature</h4><b>${hwT == null ? "–" : Math.round(hwT)}<i> °C</i></b><small>${hwOn ? `Heating${hwP > 20 ? ` · ${(hwP / 1000).toFixed(1)} kW` : ""}` : "Idle"}</small></div></div>` : ""}
       </div>
       <div class="rlist">${rooms.map((x) => { const m = x.on ? MODES[x.mode]?.c || "auto" : "off"; return `<div class="rrow m-${m}"><i class="dot"></i><span class="rn">${$esc(x.r.name)}</span><span class="rt">${fmt1(x.cur)}°</span><span class="rs">${x.on ? `${MODES[x.mode]?.label || x.mode}${x.target != null && ["heat", "cool", "heat_cool", "auto"].includes(x.mode) ? ` ${x.target}°` : ""}` : "Off"}</span></div>`; }).join("")}</div>
     </section>`;
@@ -1168,7 +1223,7 @@ const WP_SIDE_CSS = `
   .m-heat { --mc: var(--wp-heat); } .m-cool { --mc: var(--wp-cool); } .m-dry { --mc: var(--wp-dry); } .m-fan { --mc: var(--wp-fan); } .m-auto { --mc: var(--wp-auto); } .m-off { --mc: var(--wp-faint); }
   .col { height:100%; display:flex; flex-direction:column; gap: var(--wp-gap); }
   .card { background: var(--wp-card); border:1px solid var(--wp-border); border-radius: var(--wp-radius); box-shadow: var(--wp-shadow); }
-  header { display:flex; justify-content:space-between; align-items:center; } .ttl { display:flex; gap: 10px; align-items:center; } .ttl > ha-icon { --mdc-icon-size: 28px; color: var(--wp-accent); }
+  header { display:flex; justify-content:space-between; align-items:center; } .ttl { display:flex; gap: 10px; align-items:center; } .ttl > ha-icon, .ttl > svg.lu { --mdc-icon-size: 28px; color: var(--wp-accent); }
   h2 { margin:0; font-size: 22px; } .chev { color: var(--wp-muted); }
   .clim { flex: 1; min-height: 0; padding: 16px 18px; display:flex; flex-direction:column; gap: 12px; cursor:pointer; }
   .hp { height: 112px; flex: none; display:flex; align-items:center; justify-content:center; }
@@ -1179,12 +1234,14 @@ const WP_SIDE_CSS = `
   .hp.photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 38%; filter: none;
     -webkit-mask-image: linear-gradient(to bottom, #000 82%, transparent); mask-image: linear-gradient(to bottom, #000 82%, transparent); }
   .clim:has(.hp.photo) { padding-top: 14px; } .clim:has(.hp.photo) .rrow { padding: 3px 4px; font-size: 17px; } .clim:has(.hp.photo) .rs { font-size: 15px; }
-  .clim:has(.hp.photo) { gap: 10px; } .clim:has(.hp.photo) .ct { padding: 9px 14px; } .clim:has(.hp.photo) .ct b { font-size: 32px; }
+  .clim:has(.hp.photo) { gap: 10px; } .clim:has(.hp.photo) .ct { padding: 10px 12px; } .clim:has(.hp.photo) .ct b { font-size: 30px; }
   .cl-top { display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .ct { background: var(--wp-card-2); border:1px solid var(--wp-border); border-radius: 16px; padding: 12px 14px; }
+  .ct { display:flex; align-items:flex-start; gap: 8px; min-width: 0; background: var(--wp-card-2); border:1px solid var(--wp-border); border-radius: 16px; padding: 12px 12px; }
+  .ct > div { min-width: 0; } .ct h4 { margin: 2px 0 0; font-size: 14px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cti { --mdc-icon-size: 30px; --lu-stroke: 1.8; flex: none; margin-top: 2px; } .cti.h { color: var(--wp-heat); } .cti.w { color: #38bdf8; }
   .mini { display:flex; align-items:center; gap: 6px; color: var(--wp-muted); font-size: 15px; } .mini ha-icon { --mdc-icon-size: 20px; color: var(--wp-heat); }
-  .hw .mini ha-icon { color: #38bdf8; } .ct b { display:block; font-size: 36px; font-weight: 600; line-height: 1.15; } .ct b i { font-style: normal; font-size: 18px; color: var(--wp-muted); margin-left: 2px; }
-  .ct small { color: var(--wp-muted); font-size: 14px; } .hw.run small { color: #38bdf8; font-weight: 600; }
+  .hw .mini ha-icon { color: #38bdf8; } .ct b { display:block; font-size: 32px; font-weight: 800; line-height: 1.15; white-space: nowrap; } .ct b i { font-style: normal; font-size: 22px; font-weight: 700; }
+  .ct small { display:block; color: var(--wp-muted); font-size: 14px; font-weight: 600; } .hw.run small { color: #38bdf8; font-weight: 600; }
   .rlist { display:flex; flex-direction:column; gap: 2px; flex: 1; justify-content: space-evenly; }
   .rrow { display:grid; grid-template-columns: 14px 1fr auto auto; align-items:center; gap: 10px; padding: 7px 4px; font-size: 18px; border-bottom: 1px solid var(--wp-border); } .rrow:last-child { border-bottom: 0; }
   .rrow .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--mc); } .rn { font-weight: 600; } .rt { font-weight: 700; } .rs { color: var(--mc); font-weight: 600; min-width: 80px; text-align: right; font-size: 16px; } .m-off .rs { color: var(--wp-muted); }
