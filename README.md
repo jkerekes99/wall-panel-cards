@@ -55,3 +55,29 @@ Images are not shipped in this repo; put your own under `/config/www/...` and re
 
 ## Icons
 `icon:` values may use `lu:<name>` for the embedded Lucide line icons (see `src/icons.js`; regenerate with `tools/gen_icons.py`). Lucide is ISC-licensed, see `LICENSE-lucide`.
+
+
+## wp-energy (Energy tab)
+
+```yaml
+type: custom:wp-energy
+source: Live from the PV inverter       # subtitle under "Current Flow"
+ev_name: EV charger
+scale_max: 10000                        # device bars use a log scale up to this many watts
+power: { solar: sensor.x, grid_import: sensor.x, grid_export: sensor.x, home: sensor.x, ev: sensor.x }
+energy: { generation: sensor.x, import: sensor.x, export: sensor.x, import_cost: sensor.x, export_comp: sensor.x }
+devices:                                # shown in this order on the Devices switch
+  - { name: Fridge, entity: sensor.fridge_power, icon: "lu:refrigerator", color: "#2dd4bf" }
+```
+
+## wp-solar (Solar tab)
+
+```yaml
+type: custom:wp-solar
+power: sensor.pv_inverter_active_generation
+array_kwp: 13.05
+generation: sensor.pv_inverter_daily_generation
+export: sensor.pv_inverter_daily_export_to_grid
+image: /local/wall-panel/img/solar-panels.jpg   # optional photo in the Forecast card
+forecast: { today: sensor.x, remaining: sensor.x, tomorrow: sensor.x, now: sensor.x, peak_tomorrow: sensor.x, days: [sensor.d2, ...] }
+```

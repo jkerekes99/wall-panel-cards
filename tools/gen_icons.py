@@ -4,7 +4,8 @@ import re, sys, pathlib, json
 src = pathlib.Path(sys.argv[1]); root = pathlib.Path(__file__).resolve().parent.parent
 NAMES = ["house", "thermometer", "zap", "sun", "car-front", "shield", "droplet", "calendar-days", "utility-pole",
          "arrow-down", "arrow-up", "lightbulb", "fan", "door-open", "plug-zap", "battery-charging", "map-pin", "chevron-right",
-         "flame", "snowflake", "power", "timer", "calendar-clock", "sliders-horizontal", "wind", "tv"]
+         "flame", "snowflake", "power", "timer", "calendar-clock", "sliders-horizontal", "wind", "tv",
+         "leaf", "circle-dollar-sign", "dollar-sign", "clock", "gauge", "sunrise", "sunset", "server", "air-vent", "shower-head", "chef-hat", "cooking-pot", "refrigerator", "utensils-crossed", "shirt", "washing-machine", "activity", "list", "chart-column", "sun-medium", "cloud-sun", "microwave", "layers", "trending-up", "trending-down", "sparkles", "battery", "calendar"]
 out = {}
 for n in NAMES:
     svg = (src / f"{n}.svg").read_text()
