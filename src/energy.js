@@ -310,6 +310,8 @@ class WpSolar extends WpEnergyBase {
     const kwp = c.array_kwp || 0;
     if (this._skel !== skel) {
       this._skel = skel; this._parts = {};
+      const dark = this.hasAttribute("dark"), im = c.image;   // image: "/local/x.jpg" or { dark: ..., light: ... }
+      const img = typeof im === "string" ? im : im ? (dark ? im.dark || im.light : im.light || im.dark) : null;
       r.innerHTML = `<style>${WP_PALETTE}${WPE_CSS}${WPE_SOLAR_CSS}</style>
       <div class="wrap so">
         <section class="panel gen">
@@ -319,7 +321,7 @@ class WpSolar extends WpEnergyBase {
         </section>
         <section class="panel fc">
           <div class="ph"><div class="pt">${icon("lu:cloud-sun")}<div><h2>Forecast</h2><p>${$esc(c.forecast_source || "Open-Meteo Solar Forecast")}</p></div></div></div>
-          <div class="pimg ${c.image ? "" : "ph-empty"}">${c.image ? `<img src="${$esc(c.image)}" alt="">` : icon("lu:sun-medium")}</div>
+          <div class="pimg ${img ? "" : "ph-empty"}">${img ? `<img src="${$esc(img)}" alt="">` : icon("lu:sun-medium")}</div>
           <div id="fcb" class="fcb"></div>
         </section>
         <section class="panel out">

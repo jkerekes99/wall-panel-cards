@@ -78,6 +78,6 @@ power: sensor.pv_inverter_active_generation
 array_kwp: 13.05
 generation: sensor.pv_inverter_daily_generation
 export: sensor.pv_inverter_daily_export_to_grid
-image: /local/wall-panel/img/solar-panels.jpg   # optional photo in the Forecast card
+image: { dark: /local/wall-panel/img/solar-night.jpg, light: /local/wall-panel/img/solar-day.jpg }   # optional; a single path also works
 forecast: { today: sensor.x, remaining: sensor.x, tomorrow: sensor.x, now: sensor.x, peak_tomorrow: sensor.x, days: [sensor.d2, ...] }
 ```
