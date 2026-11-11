@@ -63,6 +63,7 @@ Images are not shipped in this repo; put your own under `/config/www/...` and re
 type: custom:wp-energy
 source: Live from the PV inverter       # subtitle under "Current Flow"
 ev_name: EV charger
+default_view: devices                   # or flow
 scale_max: 10000                        # device bars use a log scale up to this many watts
 power: { solar: sensor.x, grid_import: sensor.x, grid_export: sensor.x, home: sensor.x, ev: sensor.x }
 energy: { generation: sensor.x, import: sensor.x, export: sensor.x, import_cost: sensor.x, export_comp: sensor.x }

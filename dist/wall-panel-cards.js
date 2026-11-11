@@ -58,7 +58,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.7.1";
+const WP_VERSION = "0.7.2";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1695,12 +1695,12 @@ class WpEnergyBase extends WpBase {
     const t = wpeSum(arr.t, hr + 1), y = wpeSum(arr.y, hr) + arr.y[hr] * frac;
     if (y < 0.2) return "";
     const p = Math.round(((t - y) / y) * 100); const up = p >= 0;
-    return `<span class="vs ${(up ? "up" : "down") === good ? "good" : "bad"}"><b>${icon(up ? "lu:arrow-up" : "lu:arrow-down")}${Math.abs(p)}%</b><small>vs yesterday</small></span>`;
+    return `<span class="vs ${(up ? "up" : "down") === good ? "good" : "bad"}"><b title="vs the same time yesterday">${icon(up ? "lu:arrow-up" : "lu:arrow-down")}${Math.abs(p)}%</b></span>`;
   }
   _wire() {
     const r = this.shadowRoot;
     r.addEventListener("click", (e) => {
-      const v = e.target.closest("[data-view]"); if (v) { this._view = v.dataset.view; try { localStorage.setItem(`wp-${this.localName}-view`, this._view); } catch (_) {} this._sig = null; this._render(); return; }
+      const v = e.target.closest("[data-view]"); if (v) { this._view = v.dataset.view; this._sig = null; this._render(); return; }
       const m = e.target.closest("[data-more]"); if (m) wpeMoreInfo(this, m.dataset.more);
     });
   }
@@ -1721,6 +1721,7 @@ const WPE_CSS = `
   .seg button { all: unset; cursor: pointer; display:inline-flex; align-items:center; gap: 6px; padding: 5px 13px; border-radius: 999px; font-size: 13px; font-weight: 700; color: var(--wp-muted); }
   .seg button svg.lu { --mdc-icon-size: 15px; --lu-stroke: 2.2; } .seg button.on { background: var(--wp-accent); color: var(--wp-accent-text); box-shadow: 0 0 12px rgba(59,130,246,.45); }
   .hr { display:flex; gap: 8px; align-items:center; }
+  .seg.wide { display:flex; margin-top: 12px; flex: none; } .seg.wide button { flex: 1; justify-content:center; padding: 7px 13px; font-size: 14px; }
   .legend { display:flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; font-weight: 600; color: var(--wp-muted); justify-content:flex-end; }
   .legend span { display:inline-flex; align-items:center; gap: 6px; white-space: nowrap; } .legend i { width: 10px; height: 10px; border-radius: 3px; } .legend i.ln { height: 3px; width: 14px; border-radius: 2px; } .legend i.dash { height: 0; width: 14px; border-top: 2.5px dashed; border-radius: 0; background: none !important; }
   /* chart */
@@ -1741,7 +1742,8 @@ const WPE_CSS = `
   .th h4 { margin: 0; font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .big { display:block; font-size: 27px; font-weight: 800; line-height: 1.15; white-space: nowrap; letter-spacing: -.01em; font-variant-numeric: tabular-nums; } .big i { font-style: normal; font-size: 17px; font-weight: 700; color: var(--wp-muted); margin-left: 2px; }
   .sub { display:block; margin-top: 1px; font-size: 13px; color: var(--wp-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .vs { position:absolute; top: 12px; right: 13px; display:flex; flex-direction:column; align-items:flex-end; } .vs b { display:flex; align-items:center; gap: 2px; font-size: 14px; font-weight: 800; } .vs small { font-size: 11.5px; color: var(--wp-muted); }
+  .vs { position:absolute; top: 46px; right: 13px; display:flex; flex-direction:column; align-items:flex-end; } .vs b { display:flex; align-items:center; gap: 2px; font-size: 14px; font-weight: 800; } .vs small { font-size: 11.5px; color: var(--wp-muted); }
+  .vs b { padding: 3px 8px 3px 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 13%, transparent); }
   .vs.good b { color: ${WPE_C.good}; } .vs.bad b { color: ${WPE_C.bad}; } .vs svg.lu { --mdc-icon-size: 14px; --lu-stroke: 2.8; }
   .bars { flex: 1 1 0; min-height: 22px; max-height: 84px; width: 100%; display:block; margin-top: auto; }
   .split { margin-top: auto; display:flex; justify-content:space-between; gap: 8px; font-size: 12.5px; color: var(--wp-muted); white-space: nowrap; } .split b { color: var(--wp-text); font-weight: 800; }
@@ -1754,7 +1756,7 @@ const WPE_CSS = `
 
 /* ---------------- wp-energy ---------------- */
 class WpEnergy extends WpEnergyBase {
-  setConfig(config) { super.setConfig(config); if (!this._view) { let v = null; try { v = localStorage.getItem("wp-wp-energy-view"); } catch (_) {} this._view = v === "devices" ? "devices" : "flow"; } }
+  setConfig(config) { super.setConfig(config); if (!this._view) this._view = config.default_view === "flow" ? "flow" : "devices"; }
   getCardSize() { return 12; }
   _ids() { const c = this._config, p = c.power || {}, e = c.energy || {}; return [p.solar, p.grid_import, p.grid_export, p.home, p.ev, e.generation, e.import, e.export, c.theme_entity, ...(this._view === "devices" ? (c.devices || []).map((d) => d.entity) : [])]; }
   async _loadStats() {
@@ -1777,8 +1779,9 @@ class WpEnergy extends WpEnergyBase {
       <div class="wrap en">
         <section class="panel flow">
           <div class="ph"><div class="pt">${icon("lu:zap")}<div><h2>${this._view === "devices" ? "Device Power" : "Current Flow"}</h2><p id="fsub"></p></div></div>
-            <div class="hr"><span class="chip live"><i></i>Live</span><div class="seg"><button data-view="flow" class="${this._view === "flow" ? "on" : ""}">${icon("lu:activity")}Flow</button><button data-view="devices" class="${this._view === "devices" ? "on" : ""}">${icon("lu:list")}Devices</button></div></div></div>
-          <div class="fbody" id="fbody"></div>
+            <span class="chip live"><i></i>Live</span></div>
+          <div class="seg wide"><button data-view="devices" class="${this._view === "devices" ? "on" : ""}">${icon("lu:list")}Devices</button><button data-view="flow" class="${this._view === "flow" ? "on" : ""}">${icon("lu:activity")}Flow</button></div>
+          <div class="fbody">${this._view === "devices" ? `<div class="dbody" id="fbody"></div>` : `<svg class="fsvg" viewBox="0 0 400 452" preserveAspectRatio="xMidYMid meet"><g id="flines"></g><g id="fnodes"></g><g id="flabels"></g></svg><div class="toplist" id="ftop"></div>`}</div>
         </section>
         <section class="panel today">
           <div class="ph"><div class="pt">${icon("lu:clock")}<div><h2>Energy Today</h2><p id="tsub"></p></div></div>
@@ -1796,7 +1799,8 @@ class WpEnergy extends WpEnergyBase {
     const home = Math.max(0, stateNum(h, p.home) ?? solar + imp - exp), ev = Math.max(0, stateNum(h, p.ev) ?? 0);
     const gridW = imp > 20 ? imp : exp > 20 ? -exp : 0;
     set("fsub", $esc(this._view === "devices" ? this._devSub(home) : c.source || "Live from the solar inverter"));
-    set("fbody", this._view === "devices" ? this._devices(home) : this._flow(solar, home, gridW, ev));
+    if (this._view === "devices") set("fbody", this._devices(home));
+    else { const f = this._flow(solar, home, gridW, ev); set("flines", f.lines); set("fnodes", f.nodes); set("flabels", f.labels); set("ftop", this._top()); }
     // today totals (sensor state = today so far)
     const genT = stateNum(h, en.generation), impT = stateNum(h, en.import), expT = stateNum(h, en.export);
     const homeT = genT != null && impT != null && expT != null ? Math.max(0, genT + impT - expT) : null;
@@ -1820,7 +1824,7 @@ class WpEnergy extends WpEnergyBase {
     const money = (more, ic, title, v, sub, month, cls) => `<div class="tile" data-more="${$esc(more || "")}"><div class="th">${ic}<div><h4>${title}</h4><span class="big ${cls}">${aud(v)}</span><span class="sub">${sub}</span></div></div>
       <div class="foot"><div><span>This month</span><small>${since}</small></div><b>${aud(month)}</b></div></div>`;
     set("t2", ratio(icon("lu:leaf", "ti g"), "Self-sufficiency", selfS, "of home use from solar", `linear-gradient(90deg, #16a34a, ${WPE_C.exp})`, `<b>${kWh(fromSolar)}</b> kWh solar`, `<b>${kWh(impT)}</b> kWh grid`)
-      + ratio(WP_SUN_ICON.replace("<svg", '<svg class="ti wsun"'), "Solar used on site", used, "of generation kept, not exported", `linear-gradient(90deg, #f59e0b, ${WPE_C.solar})`, `<b>${kWh(genT != null ? Math.max(0, genT - (expT || 0)) : null)}</b> kWh used`, `<b>${kWh(expT)}</b> kWh exported`)
+      + ratio(WP_SUN_ICON.replace("<svg", '<svg class="ti wsun"'), "Solar used on site", used, "of generation kept on site", `linear-gradient(90deg, #f59e0b, ${WPE_C.solar})`, `<b>${kWh(genT != null ? Math.max(0, genT - (expT || 0)) : null)}</b> kWh used`, `<b>${kWh(expT)}</b> kWh exported`)
       + money(en.export_comp, icon("lu:circle-dollar-sign", "ti g"), "Export Earnings", compT, expT != null ? `${kWh(expT)} kWh${cents(compT, expT) ? ` × ${cents(compT, expT)}` : ""}` : "", st?.mComp, "g")
       + money(en.import_cost, icon("lu:circle-dollar-sign", "ti p"), "Import Cost", costT, impT != null ? `${kWh(impT)} kWh${cents(costT, impT) ? ` · avg ${cents(costT, impT)}/kWh` : ""}` : "", st?.mCost, ""));
   }
@@ -1828,25 +1832,30 @@ class WpEnergy extends WpEnergyBase {
     const c = this._config;
     const band = (w) => (w > 20 ? Math.max(0.8, Math.min(5, 3.6 / Math.sqrt(Math.max(w, 30) / 1000))).toFixed(1) : "0");
     const line = (d, w, color, rev) => { const b = band(w); return b === "0" ? `<path d="${d}" class="fl idle"/>` : `<path d="${d}" class="fl" style="stroke:${color}"/>${[0, 1, 2].map((k) => `<circle r="4.5" fill="${color}" class="dot" style="color:${color}"><animateMotion dur="${b}s" begin="-${((k * b) / 3).toFixed(2)}s" repeatCount="indefinite" path="${d}" ${rev ? 'keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ""}/></circle>`).join("")}`; };
-    const H = [300, 150], S = [300, 46], E = [105, 150], G = [495, 150];
-    const node = (xy, r, color, inner, on, cls = "") => `<g class="node ${on ? "on" : ""} ${cls}" style="--nc:${color}"><circle cx="${xy[0]}" cy="${xy[1]}" r="${r + 9}" class="halo"/><circle cx="${xy[0]}" cy="${xy[1]}" r="${r}" class="ring"/>
+    // portrait layout: solar on top, home in the middle, EV charger and grid below
+    const H = [200, 222], S = [200, 58], E = [92, 362], G = [308, 362];
+    const node = (xy, r, color, inner, on, cls = "") => `<g class="node ${on ? "on" : ""} ${cls}" style="--nc:${color}"><circle cx="${xy[0]}" cy="${xy[1]}" r="${r + 10}" class="halo"/><circle cx="${xy[0]}" cy="${xy[1]}" r="${r}" class="ring"/>
       <foreignObject x="${xy[0] - r}" y="${xy[1] - r}" width="${r * 2}" height="${r * 2}"><div class="ni">${inner}</div></foreignObject></g>`;
-    const lab = (x, y, val, sub, cls, anchor = "middle") => `<text x="${x}" y="${y}" text-anchor="${anchor}" class="nv">${kW(val)}<tspan class="nu"> kW</tspan></text><text x="${x}" y="${y + 19}" text-anchor="${anchor}" class="ns ${cls}">${$esc(sub)}</text>`;
+    const lab = (x, y, val, sub, cls, anchor = "middle") => `<text x="${x}" y="${y}" text-anchor="${anchor}" class="nv">${kW(val)}<tspan class="nu"> kW</tspan></text><text x="${x}" y="${y + 21}" text-anchor="${anchor}" class="ns ${cls}">${$esc(sub)}</text>`;
     const evOn = ev > 50, gImp = gridW > 0, gExp = gridW < 0, sOn = solar > 50;
     const night = this._hass.states["sun.sun"]?.state === "below_horizon";
-    return `<svg class="fsvg" viewBox="40 0 520 248" preserveAspectRatio="xMidYMid meet">
-      ${line(`M${S[0]},${S[1] + 30} L${H[0]},${H[1] - 46}`, solar, WPE_C.solar)}
-      ${line(`M${H[0] - 46},${H[1]} L${E[0] + 34},${E[1]}`, ev, WPE_C.ev)}
-      ${line(`M${G[0] - 34},${G[1]} L${H[0] + 46},${H[1]}`, Math.abs(gridW), gExp ? WPE_C.exp : WPE_C.imp, gExp)}
-      ${node(S, 26, WPE_C.solar, WP_SUN_ICON, sOn, "sun")}
-      ${node(H, 40, WPE_C.home, icon("lu:house"), true, "hub")}
-      ${node(E, 28, WPE_C.ev, icon("lu:plug-zap"), evOn)}
-      ${node(G, 28, gExp ? WPE_C.exp : WPE_C.imp, WP_PYLON_ICON, gImp || gExp)}
-      ${lab(S[0] + 40, S[1] - 2, solar, sOn ? "Solar · generating" : night ? "Solar · night" : "Solar · idle", sOn ? "y" : "", "start")}
-      ${lab(H[0], H[1] + 70, home, "Home", "")}
-      ${lab(E[0], E[1] + 58, ev, `${c.ev_name || "EV charger"} · ${evOn ? "charging" : "idle"}`, evOn ? "c" : "")}
-      ${lab(G[0], G[1] + 58, Math.abs(gridW), gImp ? "Grid · importing" : gExp ? "Grid · exporting" : "Grid · idle", gImp ? "p" : gExp ? "g" : "")}
-    </svg>`;
+    const toward = (a, b, ra, rb) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy); return `M${(a[0] + (dx / L) * ra).toFixed(1)},${(a[1] + (dy / L) * ra).toFixed(1)} L${(b[0] - (dx / L) * rb).toFixed(1)},${(b[1] - (dy / L) * rb).toFixed(1)}`; };
+    return {
+      lines: line(toward(S, H, 38, 54), solar, WPE_C.solar) + line(toward(H, E, 54, 42), ev, WPE_C.ev) + line(toward(G, H, 42, 54), Math.abs(gridW), gExp ? WPE_C.exp : WPE_C.imp, gExp),
+      nodes: node(S, 28, WPE_C.solar, WP_SUN_ICON, sOn, "sun") + node(H, 44, WPE_C.home, icon("lu:house"), true, "hub") + node(E, 32, WPE_C.ev, icon("lu:plug-zap"), evOn) + node(G, 32, gExp ? WPE_C.exp : WPE_C.imp, WP_PYLON_ICON, gImp || gExp),
+      labels: lab(S[0] + 46, S[1] - 4, solar, sOn ? "Solar · generating" : night ? "Solar · night" : "Solar · idle", sOn ? "y" : "", "start")
+        + lab(H[0] + 64, H[1] - 4, home, "Home", "", "start")
+        + lab(E[0], E[1] + 66, ev, `${c.ev_name || "EV charger"} · ${evOn ? "charging" : "idle"}`, evOn ? "c" : "")
+        + lab(G[0], G[1] + 66, Math.abs(gridW), gImp ? "Grid · importing" : gExp ? "Grid · exporting" : "Grid · idle", gImp ? "p" : gExp ? "g" : ""),
+    };
+  }
+  // the biggest loads right now (shown under the flow diagram)
+  _top() {
+    const h = this._hass, c = this._config, n = c.top_devices ?? 4;
+    const rows = (c.devices || []).map((d) => ({ ...d, w: Math.max(0, stateNum(h, d.entity) || 0) })).filter((d) => d.w >= 5).sort((a, b) => b.w - a.w).slice(0, n);
+    const max = Math.max(...rows.map((d) => d.w), 1);
+    const fmtW = (w) => (w >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${Math.round(w)} W`);
+    return `<h5>Biggest loads now</h5>${rows.length ? rows.map((d) => `<div class="dv on" data-more="${$esc(d.entity)}" style="--dc:${d.color || WPE_C.home}"><span class="dvi">${icon(d.icon || "mdi:flash")}</span><div class="dvb"><div class="dvt"><span>${$esc(d.name)}</span><b>${fmtW(d.w)}</b></div><div class="dvbar"><i style="width:${(d.w / max) * 100}%"></i></div></div></div>`).join("") : `<p class="none">Nothing significant running</p>`}`;
   }
   _devSub(total) {
     const h = this._hass, tracked = (this._config.devices || []).reduce((a, d) => a + Math.max(0, stateNum(h, d.entity) || 0), 0), other = total - tracked;
@@ -1892,12 +1901,15 @@ class WpEnergy extends WpEnergyBase {
   }
 }
 const WPE_ENERGY_CSS = `
-  .en { grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); grid-template-rows: minmax(0, 2.1fr) minmax(0, 1fr) minmax(0, .8fr); }
-  .en .tiles { grid-column: 1 / -1; }
+  .en { grid-template-columns: minmax(0, 3fr) minmax(0, 7fr); grid-template-rows: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, .9fr); }
+  .en .flow { grid-row: 1 / -1; } .en .tiles { grid-column: 2; }
   .pt h2 + p b, #tsub b { color: var(--wp-text); }
   .flow .pt > svg.lu { color: ${WPE_C.solar}; } .today .pt > svg.lu { color: var(--wp-text); }
   .fbody { flex: 1 1 0; min-height: 0; display:flex; flex-direction:column; margin-top: 8px; }
   .fsvg { flex: 1 1 0; min-height: 0; width: 100%; overflow: visible; }
+  .dbody { flex: 1 1 0; min-height: 0; display:flex; flex-direction:column; }
+  .toplist { flex: none; display:flex; flex-direction:column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--wp-border); }
+  .toplist h5 { margin: 0; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--wp-muted); } .toplist .none { margin: 0; font-size: 14px; color: var(--wp-muted); }
   .fl { fill:none; stroke-width: 3.5; stroke-linecap: round; opacity: .55; } .fl.idle { stroke: var(--wp-track); opacity: 1; stroke-dasharray: 2 7; }
   .dot { filter: drop-shadow(0 0 5px currentColor); }
   .node .halo { fill: color-mix(in srgb, var(--nc) 10%, transparent); stroke: none; }
@@ -1908,18 +1920,18 @@ const WPE_ENERGY_CSS = `
   .ni svg { width: 56%; height: 56%; } .ni svg.lu { --lu-stroke: 2; } .sun .ni svg { width: 78%; height: 78%; overflow: visible; }
   .node:not(.on) .ni { opacity: .55; } .node:not(.on).sun .ni svg { filter: grayscale(1); }
   .hub .ni svg { width: 50%; height: 50%; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--nc) 80%, transparent)); }
-  .nv { font-size: 21px; font-weight: 800; fill: var(--wp-text); font-variant-numeric: tabular-nums; } .nu { font-size: 13px; font-weight: 700; fill: var(--wp-muted); }
-  .ns { font-size: 13px; font-weight: 600; fill: var(--wp-muted); } .ns.y { fill: #f59e0b; } .ns.p { fill: ${WPE_C.imp}; } .ns.g { fill: ${WPE_C.exp}; } .ns.c { fill: #06b6d4; }
+  .nv { font-size: 24px; font-weight: 800; fill: var(--wp-text); font-variant-numeric: tabular-nums; } .nu { font-size: 13px; font-weight: 700; fill: var(--wp-muted); }
+  .ns { font-size: 14px; font-weight: 600; fill: var(--wp-muted); } .ns.y { fill: #f59e0b; } .ns.p { fill: ${WPE_C.imp}; } .ns.g { fill: ${WPE_C.exp}; } .ns.c { fill: #06b6d4; }
   /* devices */
   .dtot { flex: none; display:flex; align-items:center; gap: 12px; padding: 2px 2px 9px; border-bottom: 1px solid var(--wp-border); cursor: pointer; }
   .dtot .dvb { flex: 1; } .dtot .dvt b { font-size: 19px; } .dtot .dvt span { font-size: 15px; font-weight: 700; }
-  .dlist { flex: 1 1 0; min-height: 0; display:grid; grid-template-columns: 1fr 1fr; grid-auto-flow: column; grid-template-rows: repeat(6, minmax(0, 1fr)); column-gap: 18px; padding-top: 6px; }
+  .dlist { flex: 1 1 0; min-height: 0; display:grid; grid-template-columns: 1fr; grid-auto-rows: minmax(0, 1fr); padding-top: 4px; }
   .dv { display:flex; align-items:center; gap: 10px; min-width: 0; min-height: 0; cursor: pointer; }
-  .dvi { flex: none; width: 30px; height: 30px; border-radius: 10px; display:grid; place-items:center; color: var(--dc, ${WPE_C.home}); background: color-mix(in srgb, var(--dc, ${WPE_C.home}) 14%, transparent); --mdc-icon-size: 19px; --lu-stroke: 2; }
+  .dvi { flex: none; width: 34px; height: 34px; border-radius: 10px; display:grid; place-items:center; color: var(--dc, ${WPE_C.home}); background: color-mix(in srgb, var(--dc, ${WPE_C.home}) 14%, transparent); --mdc-icon-size: 19px; --lu-stroke: 2; }
   .dvi.big { width: 38px; height: 38px; border-radius: 12px; --mdc-icon-size: 22px; --dc: ${WPE_C.home}; }
   .dv:not(.on) .dvi { color: var(--wp-faint); background: var(--wp-card-2); }
   .dvb { min-width: 0; flex: 1; } .dvt { display:flex; justify-content:space-between; align-items:baseline; gap: 8px; }
-  .dvt span { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .dvt b { font-size: 14px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .dvt span { font-size: 14.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .dvt b { font-size: 15px; font-weight: 800; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .dv:not(.on) .dvt { color: var(--wp-muted); } .dv:not(.on) .dvt b { font-weight: 600; }
   .dvbar { position:relative; margin-top: 4px; height: 6px; border-radius: 99px; background: var(--wp-track); overflow: hidden; }
   .dvbar i { position:absolute; left:0; top:0; bottom:0; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--dc, ${WPE_C.home}) 55%, transparent), var(--dc, ${WPE_C.home})); }
@@ -1964,7 +1976,7 @@ class WpSolar extends WpEnergyBase {
         </section>
         <section class="panel fc">
           <div class="ph"><div class="pt">${icon("lu:cloud-sun")}<div><h2>Forecast</h2><p>${$esc(c.forecast_source || "Open-Meteo Solar Forecast")}</p></div></div></div>
-          <div class="pimg ${img ? "" : "ph-empty"}">${img ? `<img src="${$esc(img)}" alt="">` : icon("lu:sun-medium")}</div>
+          <div class="pimg ${img ? "" : "ph-empty"}">${img ? `<img src="${$esc(img)}" alt="" onerror="this.style.display='none'">` : icon("lu:sun-medium")}</div>
           <div id="fcb" class="fcb"></div>
         </section>
         <section class="panel out">
