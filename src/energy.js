@@ -216,13 +216,15 @@ class WpEnergy extends WpEnergyBase {
   }
   _devSub(total) {
     const h = this._hass, tracked = (this._config.devices || []).reduce((a, d) => a + Math.max(0, stateNum(h, d.entity) || 0), 0), other = total - tracked;
-    return `Live power by circuit${other > 30 ? ` · ${other >= 1000 ? `${(other / 1000).toFixed(2)} kW` : `${Math.round(other)} W`} on other circuits` : ""}`;
+    return `Live power by circuit${other > 30 ? ` · ${Math.round(other).toLocaleString("en-AU")} W on other circuits` : ""}`;
   }
   _devices(total) {
     const h = this._hass, c = this._config, max = c.scale_max || 10000;
     const L = (w) => (w <= 0 ? 0 : Math.min(1, Math.log10(1 + w) / Math.log10(1 + max)));
-    const fmtW = (w) => (w == null ? "–" : w >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${Math.round(w)} W`);
-    const rows = (c.devices || []).map((d) => { const w = stateNum(h, d.entity); return { ...d, w: w == null ? null : Math.max(0, w) }; });
+    const fmtW = (w) => (w == null ? "–" : `${Math.round(w).toLocaleString("en-AU")} W`);   // always watts on this view
+    // biggest draw first (unavailable sensors last); ties keep the configured order
+    const rows = (c.devices || []).map((d, k) => { const w = stateNum(h, d.entity); return { ...d, k, w: w == null ? null : Math.max(0, w) }; })
+      .sort((a, b) => (b.w ?? -1) - (a.w ?? -1) || a.k - b.k);
     const ticks = [10, 100, 1000].map((t) => `<em style="left:${L(t) * 100}%"></em>`).join("");
     const row = (d) => { const on = (d.w || 0) >= 1, col = d.color || WPE_C.home; return `<div class="dv ${on ? "on" : ""}" data-more="${$esc(d.entity)}" style="--dc:${col}">
       <span class="dvi">${icon(d.icon || "mdi:flash")}</span><div class="dvb"><div class="dvt"><span>${$esc(d.name || h.states[d.entity]?.attributes.friendly_name || d.entity)}</span><b>${fmtW(d.w)}</b></div>
