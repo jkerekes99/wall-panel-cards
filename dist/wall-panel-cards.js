@@ -73,12 +73,13 @@ const WP_LUCIDE = {
 "plus": "<path d=\"M5 12h14\" /><path d=\"M12 5v14\" />",
 "wifi-off": "<path d=\"M12 20h.01\" /><path d=\"M8.5 16.429a5 5 0 0 1 7 0\" /><path d=\"M5 12.859a10 10 0 0 1 5.17-2.69\" /><path d=\"M19 12.859a10 10 0 0 0-2.007-1.523\" /><path d=\"M2 8.82a15 15 0 0 1 4.177-2.643\" /><path d=\"M22 8.82a15 15 0 0 0-11.288-3.764\" /><path d=\"m2 2 20 20\" />",
 "volume-2": "<path d=\"M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z\" /><path d=\"M16 9a5 5 0 0 1 0 6\" /><path d=\"M19.364 18.364a9 9 0 0 0 0-12.728\" />",
+"volume-x": "<path d=\"M11 4.702a.705.705 0 0 0-1.203-.498L6.413 7.587A1.4 1.4 0 0 1 5.416 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.416a1.4 1.4 0 0 1 .997.413l3.383 3.384A.705.705 0 0 0 11 19.298z\" /><line x1=\"22\" x2=\"16\" y1=\"9\" y2=\"15\" /><line x1=\"16\" x2=\"22\" y1=\"9\" y2=\"15\" />",
 "cloud-upload": "<path d=\"M12 13v8\" /><path d=\"M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242\" /><path d=\"m8 17 4-4 4 4\" />"
 };
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.8.1";
+const WP_VERSION = "0.8.2";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2152,7 +2153,8 @@ const wpRingGrab = window.wpRingGrab || (window.wpRingGrab = {
     }
   },
   // find the <video> inside nested shadow roots
-  video(root) { if (!root) return null; const v = root.querySelector?.("video"); if (v) return v; for (const e of root.querySelectorAll?.("*") || []) { const f = this.video(e.shadowRoot); if (f) return f; } return null; },
+  video(n) { if (!n) return null; if (n.localName === "video") return n; for (const r of [n.shadowRoot, n]) { if (!r) continue; for (const c of r.children) { const v = this.video(c); if (v) return v; } } return null; },
+  async ready(el, ms = 25000) { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = this.video(el); if (v && v.readyState >= 2 && v.videoWidth) return v; await new Promise((r) => setTimeout(r, 400)); } return null; },
   shoot(v) { if (!v || v.readyState < 2 || !v.videoWidth) return null; const w = 960, c = document.createElement("canvas"); c.width = w; c.height = Math.round((v.videoHeight / v.videoWidth) * w); c.getContext("2d").drawImage(v, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", 0.78); },
   async grab(cam, settle) {
     if (this._busy || Date.now() - this._last < 60000 || !this._h || document.visibilityState === "hidden") return;
@@ -2164,8 +2166,8 @@ const wpRingGrab = window.wpRingGrab || (window.wpRingGrab = {
       const helpers = await window.loadCardHelpers();
       const el = helpers.createCardElement({ type: "picture-entity", entity: cam, camera_view: "live", show_name: false, show_state: false });
       el.hass = this._h; host.appendChild(el);
-      const t0 = Date.now(); let v = null;
-      while (Date.now() - t0 < 25000) { await new Promise((r) => setTimeout(r, 500)); el.hass = this._h; v = this.video(el); if (v && v.readyState >= 2 && v.videoWidth) break; }
+      const keep = setInterval(() => { el.hass = this._h; }, 1000);
+      await this.ready(el); clearInterval(keep);
       await new Promise((r) => setTimeout(r, settle || 2500));
       const data = this.shoot(this.video(el));
       if (data) this.save(cam, data);
@@ -2344,6 +2346,7 @@ class WpSecurity extends WpBase {
       const [kind, id, val] = [a.dataset.act, a.dataset.id, a.dataset.val];
       if (kind === "toggle") this._call(id.split(".")[0], "toggle", { entity_id: id });
       else if (kind === "select") this._call("select", "select_option", { entity_id: id, option: val });
+      else if (kind === "mute") { this._muted = !this._muted; const v = wpRingGrab.video(this._vid); if (v) { v.muted = this._muted; if (!this._muted) { v.volume = 1; v.play?.(); } } this._muteBtn(); }
       else if (kind === "num") { const s = this._hass.states[id]; const v = Math.min(+s.attributes.max, Math.max(+s.attributes.min, +s.state + +val)); this._call("number", "set_value", { entity_id: id, value: v }); }
       return;
     }
@@ -2357,19 +2360,31 @@ class WpSecurity extends WpBase {
     const pop = r.getElementById("pop");
     pop.innerHTML = `<div class="scrim" data-x></div><div class="sheet">
       <div class="lh"><span class="cico">${icon(cam.type === "doorbell" ? "lu:bell" : "lu:cctv")}</span><div class="nm"><h3>${$esc(cam.name)}</h3><p id="p-sub"></p></div><button class="x" data-x>${icon("lu:x")}</button></div>
-      <div class="lb"><div class="vidbox"><div class="vid" id="vid"></div></div><div class="side" id="p-side"></div></div></div>`;
-    this._parts["p-sub"] = this._parts["p-side"] = null;
+      <div class="lb"><div class="vidbox"><div class="vid" id="vid"></div><button class="mute" id="mute" data-act="mute"></button></div><div class="side" id="p-side"></div></div></div>`;
+    this._parts["p-sub"] = this._parts["p-side"] = null; this._muted = false; this._muteBtn();
     this._vid?.remove(); this._vid = null;
     try {
       const helpers = await window.loadCardHelpers();
       if (this._open !== i) return;
       const el = helpers.createCardElement({ type: "picture-entity", entity: cam.live_camera || cam.camera, camera_view: "live", show_name: false, show_state: false, tap_action: { action: "none" }, hold_action: { action: "none" } });
       el.hass = this._hass; this._vid = el; r.getElementById("vid")?.appendChild(el);
-      if (this._grabbed(cam)) setTimeout(() => { if (this._vid === el) { const d = wpRingGrab.shoot(wpRingGrab.video(el)); if (d) wpRingGrab.save(cam.camera, d); } }, 6000);
+      this._audio(el);
+      if (this._grabbed(cam)) wpRingGrab.ready(el).then((v) => setTimeout(() => { if (this._vid === el && v) { const d = wpRingGrab.shoot(wpRingGrab.video(el)); if (d) wpRingGrab.save(cam.camera, d); } }, 1500));
     } catch (err) { console.warn("wp-security live", err); }
     this._sig = null; this._render();
   }
-  _closeLive() { this._open = null; this._vid?.remove(); this._vid = null; const pop = this.shadowRoot?.getElementById("pop"); if (pop) pop.innerHTML = ""; }
+  // HA's camera stream starts muted; un-mute it (the tap on Live counts as the user gesture) and keep the speaker button in sync
+  _audio(el) {
+    clearInterval(this._audioT);
+    this._audioT = setInterval(() => {
+      if (this._vid !== el) { clearInterval(this._audioT); return; }
+      const v = wpRingGrab.video(el); if (!v) return;
+      if (v.muted !== !!this._muted) { v.muted = !!this._muted; if (!this._muted) { v.volume = 1; v.play?.().catch(() => { this._muted = true; v.muted = true; this._muteBtn(); }); } }
+      this._muteBtn();
+    }, 500);
+  }
+  _muteBtn() { const b = this.shadowRoot?.getElementById("mute"); if (!b) return; const h = `${icon(this._muted ? "lu:volume-x" : "lu:volume-2")}<span>${this._muted ? "Sound off" : "Sound on"}</span>`; if (b._h !== h) { b._h = h; b.innerHTML = h; } }
+  _closeLive() { clearInterval(this._audioT); this._open = null; this._vid?.remove(); this._vid = null; const pop = this.shadowRoot?.getElementById("pop"); if (pop) pop.innerHTML = ""; }
   _updateLive(infos) {
     const h = this._hass, i = this._open, cam = this._cams()[i], f = infos[i]; if (!cam) return;
     const set = (id, html) => { if (this._parts[id] !== html) { this._parts[id] = html; const el = this.shadowRoot.getElementById(id); if (el) el.innerHTML = html; } };
@@ -2443,7 +2458,8 @@ const WPS_CSS = `
   .lh .pill { color: var(--wp-text); background: var(--wp-card-2); border: 1px solid var(--wp-border); backdrop-filter: none; }
   .x { all: unset; cursor:pointer; width: 42px; height: 42px; border-radius: 50%; display:grid; place-items:center; background: var(--wp-card-2); border: 1px solid var(--wp-border); --mdc-icon-size: 22px; --lu-stroke: 2.2; }
   .lb { flex: 1 1 0; min-height: 0; display:grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; padding: 0 16px 16px; }
-  .vidbox { min-height:0; display:flex; align-items:center; justify-content:center; background: #000; border-radius: 20px; overflow:hidden; }
+  .vidbox { position:relative; min-height:0; display:flex; align-items:center; justify-content:center; background: #000; border-radius: 20px; overflow:hidden; }
+  .mute { all: unset; cursor:pointer; position:absolute; right: 14px; bottom: 14px; z-index: 2; display:inline-flex; align-items:center; gap: 7px; padding: 9px 14px; border-radius: 999px; color:#fff; background: rgba(8,12,24,.62); backdrop-filter: blur(8px); font-size: 14px; font-weight: 700; --mdc-icon-size: 18px; --lu-stroke: 2.2; }
   .vid { width: 100%; max-height: 100%; } .vid > * { display:block; --ha-card-border-radius: 0; --ha-card-border-width: 0; --ha-card-box-shadow: none; }
   .side { min-height:0; display:flex; flex-direction:column; overflow:hidden; } .side h5:first-child { margin-top: 2px; }
   .ctls { flex:none; display:flex; flex-direction:column; gap: 7px; }
