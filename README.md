@@ -82,3 +82,28 @@ export: sensor.pv_inverter_daily_export_to_grid
 image: { dark: /local/wall-panel/img/solar-night.jpg, light: /local/wall-panel/img/solar-day.jpg }   # optional; a single path also works
 forecast: { today: sensor.x, remaining: sensor.x, tomorrow: sensor.x, now: sensor.x, peak_tomorrow: sensor.x, days: [sensor.d2, ...] }
 ```
+
+## wp-security (Security tab)
+
+```yaml
+type: custom:wp-security
+refresh: 10                      # seconds between snapshot refreshes
+nvr: { record: switch.x_record, push: switch.x_push_notifications }
+cameras:                         # 6 tiles in a 3×2 grid; summary panel on the right
+  - name: Driveway
+    camera: camera.x
+    motion: binary_sensor.x_motion
+    detections: { person: binary_sensor.x_person, vehicle: binary_sensor.x_vehicle, animal: binary_sensor.x_animal }
+    record: switch.x_record
+    manual_record: switch.x_manual_record
+    ir: switch.x_infra_red_lights_in_night_mode
+    day_night: select.x_day_night_mode
+    day_night_state: sensor.x_day_night_state
+  - name: Doorbell
+    type: doorbell
+    camera: camera.doorbell_live_view
+    ding: event.doorbell_ding
+    motion_event: event.doorbell_motion
+    motion_switch: switch.doorbell_motion_detection
+    volume: number.doorbell_volume
+```
