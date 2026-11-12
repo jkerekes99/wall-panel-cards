@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.8.0";
+const WP_VERSION = "0.8.1";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -127,6 +127,7 @@ class WpPage extends HTMLElement {
   }
   set hass(hass) {
     this._hass = hass;
+    window.wpRingGrab?.hass(hass);   // Ring doorbell preview grabs (security.js)
     if (!this.shadowRoot) { this.attachShadow({ mode: "open" }); this._build(); }
     this.toggleAttribute("dark", wpIsDark(hass, this._config));
     this._updateHeader();

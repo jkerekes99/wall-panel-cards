@@ -23,9 +23,65 @@ const wpsHM = (t) => new Date(t).toLocaleTimeString("en-AU", { hour: "numeric", 
 const wpsBad = (s) => !s || s.state === "unavailable" || s.state === "unknown";
 const wpsTs = (s) => { if (wpsBad(s)) return null; const t = Date.parse(s.state); return isNaN(t) ? null : t; };
 
+
+/* ---------- Ring preview grabber ----------
+ * Ring gives Home Assistant no still image without a recording, so after each ring or motion event
+ * the tablet opens a short Live View off-screen, saves one frame (localStorage) and closes it.
+ * Every wp-page forwards hass here, so grabs happen whichever tab is showing. */
+const wpRingGrab = window.wpRingGrab || (window.wpRingGrab = {
+  _key: "wp-ring-grab", _busy: false, _last: 0,
+  configure(list) { try { localStorage.setItem(this._key, JSON.stringify(list)); } catch (_) {} this._cfg = list; },
+  cfg() { if (!this._cfg) { try { this._cfg = JSON.parse(localStorage.getItem(this._key) || "[]"); } catch (_) { this._cfg = []; } } return this._cfg; },
+  frame(cam) { try { return JSON.parse(localStorage.getItem(`wp-frame-${cam}`) || "null"); } catch (_) { return null; } },
+  save(cam, data) { const f = { t: Date.now(), data }; try { localStorage.setItem(`wp-frame-${cam}`, JSON.stringify(f)); } catch (_) {} this._mem = { ...(this._mem || {}), [cam]: f }; window.dispatchEvent(new CustomEvent("wp-frame", { detail: { camera: cam } })); },
+  get(cam) { return this._mem?.[cam] || this.frame(cam); },
+  hass(h) {
+    this._h = h;
+    for (const c of this.cfg()) {
+      const sig = [c.ding, c.motion_event].map((id) => h.states[id]?.state).join("|");
+      const prev = this._sig?.[c.camera];
+      this._sig = { ...(this._sig || {}), [c.camera]: sig };
+      if (prev !== undefined && prev !== sig && !sig.includes("unavailable")) this.grab(c.camera, 2500);
+      else if (prev === undefined && !this.get(c.camera)) this.grab(c.camera, 4000);
+    }
+  },
+  // find the <video> inside nested shadow roots
+  video(root) { if (!root) return null; const v = root.querySelector?.("video"); if (v) return v; for (const e of root.querySelectorAll?.("*") || []) { const f = this.video(e.shadowRoot); if (f) return f; } return null; },
+  shoot(v) { if (!v || v.readyState < 2 || !v.videoWidth) return null; const w = 960, c = document.createElement("canvas"); c.width = w; c.height = Math.round((v.videoHeight / v.videoWidth) * w); c.getContext("2d").drawImage(v, 0, 0, c.width, c.height); return c.toDataURL("image/jpeg", 0.78); },
+  async grab(cam, settle) {
+    if (this._busy || Date.now() - this._last < 60000 || !this._h || document.visibilityState === "hidden") return;
+    this._busy = true; this._last = Date.now();
+    const host = document.createElement("div");
+    host.style.cssText = "position:fixed;right:0;bottom:0;width:320px;height:180px;opacity:.01;pointer-events:none;z-index:-1;overflow:hidden";
+    document.body.appendChild(host);
+    try {
+      const helpers = await window.loadCardHelpers();
+      const el = helpers.createCardElement({ type: "picture-entity", entity: cam, camera_view: "live", show_name: false, show_state: false });
+      el.hass = this._h; host.appendChild(el);
+      const t0 = Date.now(); let v = null;
+      while (Date.now() - t0 < 25000) { await new Promise((r) => setTimeout(r, 500)); el.hass = this._h; v = this.video(el); if (v && v.readyState >= 2 && v.videoWidth) break; }
+      await new Promise((r) => setTimeout(r, settle || 2500));
+      const data = this.shoot(this.video(el));
+      if (data) this.save(cam, data);
+    } catch (err) { console.warn("wp ring grab", err); }
+    host.remove(); this._busy = false;
+  },
+});
+
 class WpSecurity extends WpBase {
   getCardSize() { return 12; }
-  set hass(h) { super.hass = h; if (this._vid) this._vid.hass = h; }
+  setConfig(config) {
+    super.setConfig(config);
+    wpRingGrab.configure((config.cameras || []).filter((c) => c.type === "doorbell" && c.preview !== "camera").map((c) => ({ camera: c.camera, ding: c.ding, motion_event: c.motion_event })));
+    if (!this._frameL) { this._frameL = (e) => this._showFrame(e.detail.camera); window.addEventListener("wp-frame", this._frameL); }
+  }
+  _showFrame(camera) {
+    const i = this._cams().findIndex((c) => c.camera === camera), f = wpRingGrab.get(camera), img = this.shadowRoot?.getElementById(`img-${i}`);
+    if (i < 0 || !f || !img) return;
+    img.src = f.data; img.classList.add("ok"); this._sig = null; if (this._hass) this._render();
+  }
+  _grabbed(c) { return c.type === "doorbell" && c.preview !== "camera"; }
+  set hass(h) { super.hass = h; if (this._vid) this._vid.hass = h; wpRingGrab.hass(h); }
   get hass() { return this._hass; }
   _cams() { return this._config.cameras || []; }
   _detIds(c) { return Object.entries(c.detections || {}).filter(([, id]) => id); }
@@ -51,6 +107,7 @@ class WpSecurity extends WpBase {
     if (!this.isConnected || document.visibilityState === "hidden" || !this.shadowRoot) return;
     this._cams().forEach((c, i) => {
       const st = this._hass.states[c.camera], img = this.shadowRoot.getElementById(`img-${i}`);
+      if (this._grabbed(c)) { if (img && !img.classList.contains("ok")) this._showFrame(c.camera); return; }
       if (!img || wpsBad(st) || !st.attributes.entity_picture) return;
       const url = `${st.attributes.entity_picture}&t=${Date.now()}`, pre = new Image();
       pre.onload = () => { img.src = url; img.classList.add("ok"); };
@@ -131,7 +188,7 @@ class WpSecurity extends WpBase {
         : det ? `<span class="pill det">${icon(det.icon)}${det.label} ${wpsAgo(f.det.t)}</span>` : "";
       set(`ov-${i}`, `<span class="pill st ${f.online ? "on" : "off"}"><i></i>${f.online ? "Online" : "Offline"}</span>${top ? `<span class="tr">${top}</span>` : ""}${bottom ? `<span class="bl">${bottom}</span>` : ""}`);
       const sub = bell
-        ? (cam.motion_switch ? `Motion alerts ${h.states[cam.motion_switch]?.state === "on" ? "on" : "off"}` : "Ring doorbell")
+        ? (() => { const fr = this._grabbed(cam) && wpRingGrab.get(cam.camera); return fr ? `Preview from ${wpsHM(fr.t)}` : "Preview on next ring"; })()
         : `${f.rec == null ? "" : f.rec ? `<b class="rec"><i></i>Recording</b>` : `<b class="norec">Not recording</b>`}${f.night == null ? "" : ` · ${f.night ? "Night" : "Day"}`}`;
       set(`bar-${i}`, `<span class="cico">${icon(bell ? "lu:bell" : "lu:cctv")}</span><div class="nm"><h3>${$esc(cam.name || h.states[cam.camera]?.attributes.friendly_name || cam.camera)}</h3><p>${sub}</p></div>
         <button class="live" data-live="${i}">${icon("lu:video")}Live</button>`);
@@ -158,7 +215,7 @@ class WpSecurity extends WpBase {
     const onoff = (v) => (v == null ? "–" : v ? `<span class="ok"><i></i>On</span>` : `<span class="warn">Off</span>`);
     const chev = icon("lu:chevron-right", "chev");
     const rows = [
-      n.record ? row("lu:hard-drive", "NVR recording", "Recording to the NVR", onoff(recOn), `data-more="${$esc(n.record)}"`) : "",
+      n.record ? row("lu:hard-drive", "NVR recording", "24/7 to the NVR", recOn ? `<span class="ok"><i></i>Recording</span>` : `<span class="warn">Not recording</span>`) : "",
       row("lu:cctv", "Cameras online", `${online}/${cams.length} online${nightN ? ` · ${nightN} in night vision` : ""}`, `<span class="${online === cams.length ? "ok" : "warn"}"><i></i>${online}/${cams.length}</span>`),
       row("lu:activity", "Last motion", lastM ? `${$esc(cams[lastM.i].name)} · ${wpsHM(lastM.t)}` : "Nothing in the last 24 h", lastM ? `${WPS_TYPES[lastM.type].label}${chev}` : "", lastM ? `data-live="${lastM.i}"` : ""),
       bell ? row("lu:bell", "Doorbell", infos[bellI].ringT ? `Last ring ${wpsHM(infos[bellI].ringT)}${Date.now() - infos[bellI].ringT > 86400000 ? ` · ${new Date(infos[bellI].ringT).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}` : ""}` : "No rings recorded", bell.motion_switch ? `Motion ${onoff(h.states[bell.motion_switch]?.state === "on")}` : "", `data-live="${bellI}"`) : "",
@@ -200,8 +257,9 @@ class WpSecurity extends WpBase {
     try {
       const helpers = await window.loadCardHelpers();
       if (this._open !== i) return;
-      const el = helpers.createCardElement({ type: "picture-entity", entity: cam.camera, camera_view: "live", show_name: false, show_state: false, tap_action: { action: "none" }, hold_action: { action: "none" } });
+      const el = helpers.createCardElement({ type: "picture-entity", entity: cam.live_camera || cam.camera, camera_view: "live", show_name: false, show_state: false, tap_action: { action: "none" }, hold_action: { action: "none" } });
       el.hass = this._hass; this._vid = el; r.getElementById("vid")?.appendChild(el);
+      if (this._grabbed(cam)) setTimeout(() => { if (this._vid === el) { const d = wpRingGrab.shoot(wpRingGrab.video(el)); if (d) wpRingGrab.save(cam.camera, d); } }, 6000);
     } catch (err) { console.warn("wp-security live", err); }
     this._sig = null; this._render();
   }
@@ -218,8 +276,6 @@ class WpSecurity extends WpBase {
       const v = cam.volume && h.states[cam.volume];
       if (v && !wpsBad(v)) ctl += `<div class="ctl"><span class="ri">${icon("lu:volume-2")}</span><div class="rt"><b>Chime volume</b><span>${Math.round(+v.state)} of ${Math.round(+v.attributes.max)}</span></div><div class="pm"><button data-act="num" data-id="${$esc(cam.volume)}" data-val="-1">${icon("lu:minus")}</button><button data-act="num" data-id="${$esc(cam.volume)}" data-val="1">${icon("lu:plus")}</button></div></div>`;
     } else {
-      ctl += tog(cam.record, "Recording", "Record to the NVR on events", "lu:hard-drive");
-      ctl += tog(cam.manual_record, "Record now", "Start a manual recording", "lu:circle-dot");
       ctl += tog(cam.ir, "Infrared lights", "Night vision illumination", "lu:eye");
       const s = cam.day_night && h.states[cam.day_night];
       if (s && !wpsBad(s)) ctl += `<div class="ctl col"><div class="rt"><b>Day / night mode</b></div><div class="seg">${(s.attributes.options || []).map((o) => `<button class="${o === s.state ? "on" : ""}" data-act="select" data-id="${$esc(cam.day_night)}" data-val="${$esc(o)}">${$esc(o.replace(/_/g, " ").replace(/^./, (m) => m.toUpperCase()))}</button>`).join("")}</div></div>`;

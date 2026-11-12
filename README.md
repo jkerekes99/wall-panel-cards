@@ -107,3 +107,5 @@ cameras:                         # 6 tiles in a 3×2 grid; summary panel on the 
     motion_switch: switch.doorbell_motion_detection
     volume: number.doorbell_volume
 ```
+
+Security notes: `live_camera` (optional) is the stream the Live pop-up opens (e.g. the Reolink *Balanced* entity) while `camera` feeds the tile snapshots. Doorbell tiles (`type: doorbell`) take their preview from a short off-screen Live View after each ring/motion event (stored on the device); set `preview: camera` to use the camera's own snapshot instead.
