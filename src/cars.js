@@ -30,7 +30,7 @@ class WpEv extends WpBase {
           <div class="grid" id="c-grid"></div>
           <div class="btns" id="c-btns"></div>
         </section>
-        <section class="panel evcc"><div id="e-top"></div><div id="e-bot"></div></section>
+        <section class="panel evcc"><div id="e-head"></div><div class="rate" id="e-rate"><div class="fx"><i></i><i></i><i></i></div><div class="rc" id="e-ratec"></div></div><div id="e-top"></div><div id="e-bot"></div></section>
       </div>`;
       if (!this._wired) { this._wired = true; r.addEventListener("click", (e) => this._click(e)); }
     }
@@ -73,7 +73,8 @@ class WpEv extends WpBase {
       <div class="tset"><button data-act="t" data-v="-1">${icon("lu:minus")}</button><b>${tgt == null || isNaN(tgt) ? "–" : tgt.toFixed(1)}<i>°C</i></b><button data-act="t" data-v="1">${icon("lu:plus")}</button></div>
       <button class="b ${clOn ? "lit" : "pri"}" data-act="clon">${icon("lu:fan")}${clOn ? "Climate on" : "Start climate"}</button>
       <button class="b" data-act="cloff" ${clOn ? "" : "disabled"}>${icon("lu:power")}Stop</button>`);
-    const ep = this._evcc(); set("e-top", ep.top); set("e-bot", ep.bot);
+    const ep = this._evcc(); set("e-head", ep.head || ""); set("e-ratec", ep.rate || ""); set("e-top", ep.top); set("e-bot", ep.bot);
+    const rb = r.getElementById("e-rate"); if (rb) { rb.classList.toggle("on", !!ep.charging); rb.style.display = ep.rate ? "" : "none"; rb.dataset.more = (c.evcc || {}).charge_power || ""; }
   }
 
   _evcc() {
@@ -95,10 +96,11 @@ class WpEv extends WpBase {
     const c$ = (v) => (v == null ? "–" : `${(v * 100).toFixed(1)}c`);
     const stat = (label, val, sub = "") => `<div class="st"><span>${label}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
     const remTxt = rem ? (rem >= 3600 ? `${Math.floor(rem / 3600)} h ${Math.round((rem % 3600) / 60)} min` : `${Math.round(rem / 60)} min`) : null;
-    return { top: `<div class="ph"><div class="pt">${icon("lu:plug-zap")}<div><h2>Smart Charging</h2><p>evcc${mode ? ` · ${$esc(mode.replace(/^./, (m) => m.toUpperCase()))} mode` : ""}</p></div></div>
-        <span class="chip ${charging ? "go" : connected ? "pl" : ""}"><i></i>${charging ? "Charging" : connected ? "Connected" : "Idle"}</span></div>
-      <div class="rate" data-more="${$esc(ev.charge_power)}"><div class="kw"><b>${kw == null ? "–" : kw.toFixed(1)}</b><span>kW</span></div>
-        <div class="rt"><b>Charge rate</b><span>${charging && amps != null ? `${Math.round(amps)} A${ph ? ` · ${ph} phase${ph > 1 ? "s" : ""}` : ""}` : "Not charging"}${remTxt ? ` · ${remTxt} to go` : ""}</span></div></div>
+    return { charging, head: `<div class="ph"><div class="pt">${icon("lu:plug-zap")}<div><h2>Smart Charging</h2><p>evcc${mode ? ` · ${$esc(mode.replace(/^./, (m) => m.toUpperCase()))} mode` : ""}</p></div></div>
+        <span class="chip ${charging ? "go" : connected ? "pl" : ""}"><i></i>${charging ? "Charging" : connected ? "Connected" : "Idle"}</span></div>`,
+      rate: `<div class="kw">${charging ? icon("lu:zap", "bolt") : ""}<b>${kw == null ? "–" : kw.toFixed(1)}</b><span>kW</span></div>
+        <div class="rt"><b>Charge rate</b><span>${charging && amps != null ? `${Math.round(amps)} A${ph ? ` · ${ph} phase${ph > 1 ? "s" : ""}` : ""}` : "Not charging"}${remTxt ? ` · ${remTxt} to go` : ""}</span></div>`,
+      top: `
       ${status && status !== "unknown" ? `<p class="why">${icon("lu:sun")}${$esc(status)}</p>` : ""}
       <h5>Grid charging</h5>
       <div class="seg2">${presets.map((p) => `<button class="${near(lim, p.value) ? "on" : ""}" data-act="limit" data-v="${p.value}"><b style="${p.color ? `--ic:${p.color}` : ""}">${p.icon ? icon(p.icon) : ""}${$esc(p.label)}</b><span>${$esc(p.sub)}</span></button>`).join("")}</div>
@@ -168,7 +170,19 @@ const WPV_CSS = `
   /* evcc */
   .evcc .st { padding: 10px 12px; } .evcc .st b { font-size: 20px; }
   .evcc .rate { padding: 16px 20px; margin-top: 16px; } .evcc .kw b { font-size: 54px; } .evcc h5 { margin: 14px 2px 7px; }
-  .rate { flex:none; display:flex; align-items:center; gap: 18px; margin-top: 22px; padding: 18px 20px; border-radius: 20px; background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(59,130,246,.10)); border: 1px solid rgba(34,211,238,.28); cursor: pointer; }
+  .rate { position:relative; overflow:hidden; flex:none; display:flex; align-items:center; gap: 18px; margin-top: 22px; padding: 18px 20px; border-radius: 20px; background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(59,130,246,.10)); border: 1px solid rgba(34,211,238,.28); cursor: pointer; }
+  .rc { position:relative; z-index:1; display:flex; align-items:center; gap: 18px; min-width:0; }
+  .fx { position:absolute; inset:0; pointer-events:none; opacity:0; transition: opacity .6s; }
+  .rate.on { border-color: rgba(34,211,238,.6); animation: wpvglow 2.6s ease-in-out infinite; }
+  .rate.on .fx { opacity: 1; }
+  .fx::before { content:""; position:absolute; top:0; bottom:0; width: 45%; left: -50%; background: linear-gradient(100deg, transparent, rgba(34,211,238,.28), rgba(125,249,255,.38), rgba(34,211,238,.28), transparent); animation: wpvsweep 2.4s linear infinite; }
+  .fx i { position:absolute; bottom: 0; width: 6px; height: 6px; border-radius: 50%; background: #67e8f9; box-shadow: 0 0 8px #22d3ee; opacity: 0; animation: wpvrise 2.4s ease-in infinite; }
+  .fx i:nth-child(1) { left: 58%; } .fx i:nth-child(2) { left: 74%; animation-delay: .8s; } .fx i:nth-child(3) { left: 88%; animation-delay: 1.6s; }
+  .bolt { --mdc-icon-size: 34px; --lu-stroke: 2.2; color: #22d3ee; filter: drop-shadow(0 0 8px rgba(34,211,238,.9)); animation: wpvbolt 1.3s ease-in-out infinite; align-self: center; margin-right: 4px; }
+  @keyframes wpvglow { 0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,.0), 0 0 18px rgba(34,211,238,.18); } 50% { box-shadow: 0 0 0 3px rgba(34,211,238,.18), 0 0 34px rgba(34,211,238,.45); } }
+  @keyframes wpvsweep { from { left: -50%; } to { left: 110%; } }
+  @keyframes wpvrise { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(-110px); opacity: 0; } }
+  @keyframes wpvbolt { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .55; transform: scale(.88); } }
   .kw { display:flex; align-items:baseline; gap: 6px; } .kw b { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; } .kw span { font-size: 20px; font-weight: 700; color: var(--wp-muted); }
   .rt { display:flex; flex-direction:column; min-width:0; } .rt b { font-size: 17px; font-weight: 750; } .rt span { font-size: 13.5px; color: var(--wp-muted); }
   .why { flex:none; display:flex; align-items:center; gap: 7px; margin: 10px 2px 0; font-size: 13px; color: var(--wp-muted); --mdc-icon-size: 15px; --lu-stroke: 2.2; } .why svg { color: #f59e0b; flex:none; }
