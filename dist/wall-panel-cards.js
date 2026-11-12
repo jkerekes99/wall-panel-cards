@@ -79,7 +79,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.8.2";
+const WP_VERSION = "0.8.3";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2189,7 +2189,7 @@ class WpSecurity extends WpBase {
     img.src = f.data; img.classList.add("ok"); this._sig = null; if (this._hass) this._render();
   }
   _grabbed(c) { return c.type === "doorbell" && c.preview !== "camera"; }
-  set hass(h) { super.hass = h; if (this._vid) this._vid.hass = h; wpRingGrab.hass(h); }
+  set hass(h) { super.hass = h; if (this._vid) { this._vid.hass = h; if (this._vid._wpEntity && h.states[this._vid._wpEntity] !== this._vid.stateObj) this._vid.stateObj = h.states[this._vid._wpEntity]; } wpRingGrab.hass(h); }
   get hass() { return this._hass; }
   _cams() { return this._config.cameras || []; }
   _detIds(c) { return Object.entries(c.detections || {}).filter(([, id]) => id); }
@@ -2366,8 +2366,17 @@ class WpSecurity extends WpBase {
     try {
       const helpers = await window.loadCardHelpers();
       if (this._open !== i) return;
-      const el = helpers.createCardElement({ type: "picture-entity", entity: cam.live_camera || cam.camera, camera_view: "live", show_name: false, show_state: false, tap_action: { action: "none" }, hold_action: { action: "none" } });
-      el.hass = this._hass; this._vid = el; r.getElementById("vid")?.appendChild(el);
+      const ent = cam.live_camera || cam.camera;
+      let el;
+      if (customElements.get("ha-camera-stream")) {
+        // HA's stream element directly, un-muted: the picture card always negotiates the stream without an audio track
+        el = document.createElement("ha-camera-stream");
+        el.hass = this._hass; el.stateObj = this._hass.states[ent]; el.muted = false; el.controls = false; el.allowExoPlayer = true; el._wpEntity = ent;
+      } else {
+        el = helpers.createCardElement({ type: "picture-entity", entity: ent, camera_view: "live", show_name: false, show_state: false, tap_action: { action: "none" }, hold_action: { action: "none" } });
+        el.hass = this._hass;
+      }
+      this._vid = el; r.getElementById("vid")?.appendChild(el);
       this._audio(el);
       if (this._grabbed(cam)) wpRingGrab.ready(el).then((v) => setTimeout(() => { if (this._vid === el && v) { const d = wpRingGrab.shoot(wpRingGrab.video(el)); if (d) wpRingGrab.save(cam.camera, d); } }, 1500));
     } catch (err) { console.warn("wp-security live", err); }
@@ -2460,7 +2469,7 @@ const WPS_CSS = `
   .lb { flex: 1 1 0; min-height: 0; display:grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; padding: 0 16px 16px; }
   .vidbox { position:relative; min-height:0; display:flex; align-items:center; justify-content:center; background: #000; border-radius: 20px; overflow:hidden; }
   .mute { all: unset; cursor:pointer; position:absolute; right: 14px; bottom: 14px; z-index: 2; display:inline-flex; align-items:center; gap: 7px; padding: 9px 14px; border-radius: 999px; color:#fff; background: rgba(8,12,24,.62); backdrop-filter: blur(8px); font-size: 14px; font-weight: 700; --mdc-icon-size: 18px; --lu-stroke: 2.2; }
-  .vid { width: 100%; max-height: 100%; } .vid > * { display:block; --ha-card-border-radius: 0; --ha-card-border-width: 0; --ha-card-box-shadow: none; }
+  .vid { width: 100%; max-height: 100%; } .vid ha-camera-stream { display:block; width: 100%; } .vid > * { display:block; --ha-card-border-radius: 0; --ha-card-border-width: 0; --ha-card-box-shadow: none; }
   .side { min-height:0; display:flex; flex-direction:column; overflow:hidden; } .side h5:first-child { margin-top: 2px; }
   .ctls { flex:none; display:flex; flex-direction:column; gap: 7px; }
   .ctl { all: unset; box-sizing:border-box; display:flex; align-items:center; gap: 11px; padding: 10px 12px; border-radius: 14px; background: var(--wp-card-2); border: 1px solid var(--wp-border); cursor:pointer; }
