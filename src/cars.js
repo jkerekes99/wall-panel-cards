@@ -30,7 +30,7 @@ class WpEv extends WpBase {
           <div class="grid" id="c-grid"></div>
           <div class="btns" id="c-btns"></div>
         </section>
-        <section class="panel evcc"><div id="e-top"></div><div id="e-limw"><h5>Charge limit</h5><div class="slim"><input type="range" id="lim"><b id="limv">–</b></div><p class="lim" id="limn"></p></div><div id="e-bot"></div></section>
+        <section class="panel evcc"><div id="e-top"></div><div id="e-bot"></div></section>
       </div>`;
       if (!this._wired) { this._wired = true; r.addEventListener("click", (e) => this._click(e)); }
     }
@@ -74,7 +74,6 @@ class WpEv extends WpBase {
       <button class="b ${clOn ? "lit" : "pri"}" data-act="clon">${icon("lu:fan")}${clOn ? "Climate on" : "Start climate"}</button>
       <button class="b" data-act="cloff" ${clOn ? "" : "disabled"}>${icon("lu:power")}Stop</button>`);
     const ep = this._evcc(); set("e-top", ep.top); set("e-bot", ep.bot);
-    this._limit();
   }
 
   _evcc() {
@@ -84,7 +83,8 @@ class WpEv extends WpBase {
     const kw = stateNum(h, ev.charge_power), amps = stateNum(h, ev.charge_current), ph = stateNum(h, ev.phases);
     const charging = st(ev.charging)?.state === "on", connected = st(ev.connected)?.state === "on";
     const lim = stateNum(h, ev.price_limit), grid = stateNum(h, ev.grid_price);
-    const presets = c.price_presets || [{ value: 0.05, label: "Cheap power", sub: "≤ 5.0c/kWh" }, { value: 0.045, label: "Solar only", sub: "≤ 4.5c/kWh" }];
+    const presets = c.price_presets || [{ value: 0.05, label: "Cheap power (12am-4am)", sub: "≤ 5.0c/kWh", icon: "lu:plug-zap" }, { value: 0.045, label: "Solar only", sub: "≤ 4.5c/kWh", icon: "lu:sun", color: "#f59e0b" }];
+    const socOpts = c.limit_options || [80, 100], socLim = stateNum(h, ev.limit_set), carSoc = stateNum(h, (c.car || {}).battery);
     const near = (a, b) => a != null && Math.abs(a - b) < 0.0005;
     const cheapNow = st(ev.smart_cost_active)?.state === "on";
     const mode = st(ev.mode)?.state;
@@ -101,8 +101,11 @@ class WpEv extends WpBase {
         <div class="rt"><b>Charge rate</b><span>${charging && amps != null ? `${Math.round(amps)} A${ph ? ` · ${ph} phase${ph > 1 ? "s" : ""}` : ""}` : "Not charging"}${remTxt ? ` · ${remTxt} to go` : ""}</span></div></div>
       ${status && status !== "unknown" ? `<p class="why">${icon("lu:sun")}${$esc(status)}</p>` : ""}
       <h5>Grid charging</h5>
-      <div class="seg2">${presets.map((p) => `<button class="${near(lim, p.value) ? "on" : ""}" data-act="limit" data-v="${p.value}"><b>${$esc(p.label)}</b><span>${$esc(p.sub)}</span></button>`).join("")}</div>
+      <div class="seg2">${presets.map((p) => `<button class="${near(lim, p.value) ? "on" : ""}" data-act="limit" data-v="${p.value}"><b style="${p.color ? `--ic:${p.color}` : ""}">${p.icon ? icon(p.icon) : ""}${$esc(p.label)}</b><span>${$esc(p.sub)}</span></button>`).join("")}</div>
       <p class="lim">${lim == null ? "" : `Price limit <b>${c$(lim)}/kWh</b>`}${grid != null ? ` · grid now <b>${c$(grid)}</b>` : ""}${cheapNow ? ` · <span class="okc">cheap power active</span>` : ""}</p>
+      ${ev.limit_set ? `<h5>Charge limit</h5>
+      <div class="seg2 soc">${socOpts.map((v) => `<button class="${socLim != null && Math.round(socLim) === v ? "on" : ""}" data-act="soc" data-v="${v}"><b>${v}%</b></button>`).join("")}</div>
+      <p class="lim">${carSoc != null ? `Car is at <b>${Math.round(carSoc)}%</b> · ` : ""}evcc stops charging at the limit</p>` : ""}
 `, bot: `
       <h5>This session</h5>
       <div class="stats">${stat("Energy", sess == null ? "–" : `${sess.toFixed(1)} kWh`)}${stat("From solar", solar == null ? "–" : `${Math.round(solar)}%`)}${stat("Cost", cost == null ? "–" : `$${cost.toFixed(2)}`, ppk != null ? `${c$(ppk)}/kWh` : "")}${stat("Charging for", dur == null ? "–" : dur >= 3600 ? `${Math.floor(dur / 3600)} h ${Math.round((dur % 3600) / 60)} m` : `${Math.round(dur / 60)} min`)}</div>
@@ -110,24 +113,6 @@ class WpEv extends WpBase {
       <div class="stats three">${stat("Charged", tot == null ? "–" : `${Math.round(tot).toLocaleString("en-AU")} kWh`)}${stat("Solar", tsol == null ? "–" : `${Math.round(tsol)}%`)}${stat("Avg price", c$(avg), "per kWh")}</div>` };
   }
 
-  // evcc charge-limit slider: built once, value only updated when not being dragged
-  _limit() {
-    const h = this._hass, ev = this._config.evcc || {}, r = this.shadowRoot, s = h.states[ev.limit_set];
-    const wrap = r.getElementById("e-limw"); if (!wrap) return;
-    wrap.style.display = s ? "" : "none"; if (!s) return;
-    const inp = r.getElementById("lim"), out = r.getElementById("limv"), note = r.getElementById("limn");
-    const min = +s.attributes.min || 0, max = +s.attributes.max || 100, step = +s.attributes.step || 5;
-    if (!inp._wired) {
-      inp._wired = true; inp.min = min; inp.max = max; inp.step = step;
-      const show = () => { out.textContent = `${inp.value}%`; inp.style.setProperty("--p", `${((inp.value - min) / (max - min)) * 100}%`); };
-      inp.addEventListener("input", () => { this._drag = true; clearTimeout(this._dragT); show(); });
-      inp.addEventListener("change", () => { show(); this._call("number", "set_value", { entity_id: ev.limit_set, value: +inp.value }); this._dragT = setTimeout(() => { this._drag = false; this._limit(); }, 4000); });
-      inp._show = show;
-    }
-    if (!this._drag && s.state !== "unavailable" && s.state !== "unknown") { inp.value = Math.round(+s.state); inp._show(); }
-    const soc = stateNum(h, (this._config.car || {}).battery);
-    note.innerHTML = soc != null ? `Car is at <b>${Math.round(soc)}%</b> · evcc stops charging at the limit` : "evcc stops charging at the limit";
-  }
   async _click(e) {
     const m = e.target.closest("[data-more]");
     const a = e.target.closest("[data-act]");
@@ -149,6 +134,7 @@ class WpEv extends WpBase {
     } else if (act === "clon") this._call("climate", "turn_on", { entity_id: car.climate });
     else if (act === "cloff") this._call("climate", "turn_off", { entity_id: car.climate });
     else if (act === "limit") this._call("number", "set_value", { entity_id: ev.price_limit, value: +a.dataset.v });
+    else if (act === "soc") this._call("number", "set_value", { entity_id: ev.limit_set, value: +a.dataset.v });
   }
 }
 
@@ -192,11 +178,8 @@ const WPV_CSS = `
   .seg2 button b { font-size: 15.5px; font-weight: 750; } .seg2 button span { font-size: 12.5px; }
   .seg2 button.on { background: var(--wp-card); color: var(--wp-text); box-shadow: 0 2px 8px rgba(0,0,0,.18); } .seg2 button.on span { color: var(--wp-muted); }
   .lim { flex:none; margin: 8px 4px 0; font-size: 13px; color: var(--wp-muted); } .lim b { color: var(--wp-text); } .okc { color: #16a34a; font-weight: 700; } :host([dark]) .okc { color: #4ade80; }
-  .slim { flex:none; display:flex; align-items:center; gap: 16px; padding: 12px 16px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); }
-  .slim b { min-width: 58px; text-align:right; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .slim input { flex: 1; -webkit-appearance: none; appearance: none; height: 12px; border-radius: 99px; background: linear-gradient(90deg, #16a34a, #4ade80) 0/var(--p, 50%) 100% no-repeat, var(--wp-track); outline: none; margin: 0; }
-  .slim input::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%; background: #fff; border: 3px solid #22c55e; box-shadow: 0 2px 8px rgba(0,0,0,.35); cursor: pointer; }
-  .slim input::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 3px solid #22c55e; cursor: pointer; }
+  .seg2 button b { display:inline-flex; align-items:center; gap: 7px; --mdc-icon-size: 17px; --lu-stroke: 2.2; } .seg2 button.on b svg { color: var(--ic, var(--wp-accent)); }
+  .seg2.soc button { padding: 12px 8px; } .seg2.soc button b { font-size: 19px; }
   .stats { flex:none; display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .st { display:flex; flex-direction:column; padding: 10px 12px; border-radius: 14px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width:0; }
   .st span { font-size: 12px; color: var(--wp-muted); font-weight: 600; } .st b { font-size: 18px; font-weight: 800; white-space:nowrap; } .st small { font-size: 11.5px; color: var(--wp-muted); }
