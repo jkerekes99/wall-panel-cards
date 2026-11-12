@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.0";
+const WP_VERSION = "0.9.1";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -2519,7 +2519,7 @@ class WpEv extends WpBase {
           <div class="grid" id="c-grid"></div>
           <div class="btns" id="c-btns"></div>
         </section>
-        <section class="panel evcc" id="e"></section>
+        <section class="panel evcc"><div id="e-top"></div><div id="e-limw"><h5>Charge limit</h5><div class="slim"><input type="range" id="lim"><b id="limv">–</b></div><p class="lim" id="limn"></p></div><div id="e-bot"></div></section>
       </div>`;
       if (!this._wired) { this._wired = true; r.addEventListener("click", (e) => this._click(e)); }
     }
@@ -2562,12 +2562,13 @@ class WpEv extends WpBase {
       <div class="tset"><button data-act="t" data-v="-1">${icon("lu:minus")}</button><b>${tgt == null || isNaN(tgt) ? "–" : tgt.toFixed(1)}<i>°C</i></b><button data-act="t" data-v="1">${icon("lu:plus")}</button></div>
       <button class="b ${clOn ? "lit" : "pri"}" data-act="clon">${icon("lu:fan")}${clOn ? "Climate on" : "Start climate"}</button>
       <button class="b" data-act="cloff" ${clOn ? "" : "disabled"}>${icon("lu:power")}Stop</button>`);
-    set("e", this._evcc());
+    const ep = this._evcc(); set("e-top", ep.top); set("e-bot", ep.bot);
+    this._limit();
   }
 
   _evcc() {
     const h = this._hass, c = this._config, ev = c.evcc || {};
-    if (!ev.charge_power) return "";
+    if (!ev.charge_power) return { top: "", bot: "" };
     const st = (id) => h.states[id];
     const kw = stateNum(h, ev.charge_power), amps = stateNum(h, ev.charge_current), ph = stateNum(h, ev.phases);
     const charging = st(ev.charging)?.state === "on", connected = st(ev.connected)?.state === "on";
@@ -2578,12 +2579,12 @@ class WpEv extends WpBase {
     const mode = st(ev.mode)?.state;
     const status = st(ev.pv_status)?.state;
     const sess = stateNum(h, ev.session_energy), solar = stateNum(h, ev.session_solar), cost = stateNum(h, ev.session_cost), ppk = stateNum(h, ev.session_price_kwh);
-    const limSoc = stateNum(h, ev.limit_soc), rem = stateNum(h, ev.remaining);
+    const rem = stateNum(h, ev.remaining), dur = stateNum(h, ev.duration);
     const tot = stateNum(h, ev.total_energy), avg = stateNum(h, ev.avg_price), tsol = stateNum(h, ev.total_solar);
     const c$ = (v) => (v == null ? "–" : `${(v * 100).toFixed(1)}c`);
     const stat = (label, val, sub = "") => `<div class="st"><span>${label}</span><b>${val}</b>${sub ? `<small>${sub}</small>` : ""}</div>`;
     const remTxt = rem ? (rem >= 3600 ? `${Math.floor(rem / 3600)} h ${Math.round((rem % 3600) / 60)} min` : `${Math.round(rem / 60)} min`) : null;
-    return `<div class="ph"><div class="pt">${icon("lu:plug-zap")}<div><h2>Smart Charging</h2><p>evcc${mode ? ` · ${$esc(mode.replace(/^./, (m) => m.toUpperCase()))} mode` : ""}</p></div></div>
+    return { top: `<div class="ph"><div class="pt">${icon("lu:plug-zap")}<div><h2>Smart Charging</h2><p>evcc${mode ? ` · ${$esc(mode.replace(/^./, (m) => m.toUpperCase()))} mode` : ""}</p></div></div>
         <span class="chip ${charging ? "go" : connected ? "pl" : ""}"><i></i>${charging ? "Charging" : connected ? "Connected" : "Idle"}</span></div>
       <div class="rate" data-more="${$esc(ev.charge_power)}"><div class="kw"><b>${kw == null ? "–" : kw.toFixed(1)}</b><span>kW</span></div>
         <div class="rt"><b>Charge rate</b><span>${charging && amps != null ? `${Math.round(amps)} A${ph ? ` · ${ph} phase${ph > 1 ? "s" : ""}` : ""}` : "Not charging"}${remTxt ? ` · ${remTxt} to go` : ""}</span></div></div>
@@ -2591,12 +2592,31 @@ class WpEv extends WpBase {
       <h5>Grid charging</h5>
       <div class="seg2">${presets.map((p) => `<button class="${near(lim, p.value) ? "on" : ""}" data-act="limit" data-v="${p.value}"><b>${$esc(p.label)}</b><span>${$esc(p.sub)}</span></button>`).join("")}</div>
       <p class="lim">${lim == null ? "" : `Price limit <b>${c$(lim)}/kWh</b>`}${grid != null ? ` · grid now <b>${c$(grid)}</b>` : ""}${cheapNow ? ` · <span class="okc">cheap power active</span>` : ""}</p>
+`, bot: `
       <h5>This session</h5>
-      <div class="stats">${stat("Energy", sess == null ? "–" : `${sess.toFixed(1)} kWh`)}${stat("From solar", solar == null ? "–" : `${Math.round(solar)}%`)}${stat("Cost", cost == null ? "–" : `$${cost.toFixed(2)}`, ppk != null ? `${c$(ppk)}/kWh` : "")}${stat("Charge to", limSoc == null ? "–" : `${Math.round(limSoc)}%`)}</div>
+      <div class="stats">${stat("Energy", sess == null ? "–" : `${sess.toFixed(1)} kWh`)}${stat("From solar", solar == null ? "–" : `${Math.round(solar)}%`)}${stat("Cost", cost == null ? "–" : `$${cost.toFixed(2)}`, ppk != null ? `${c$(ppk)}/kWh` : "")}${stat("Charging for", dur == null ? "–" : dur >= 3600 ? `${Math.floor(dur / 3600)} h ${Math.round((dur % 3600) / 60)} m` : `${Math.round(dur / 60)} min`)}</div>
       <h5>All time</h5>
-      <div class="stats three">${stat("Charged", tot == null ? "–" : `${Math.round(tot).toLocaleString("en-AU")} kWh`)}${stat("Solar", tsol == null ? "–" : `${Math.round(tsol)}%`)}${stat("Avg price", c$(avg), "per kWh")}</div>`;
+      <div class="stats three">${stat("Charged", tot == null ? "–" : `${Math.round(tot).toLocaleString("en-AU")} kWh`)}${stat("Solar", tsol == null ? "–" : `${Math.round(tsol)}%`)}${stat("Avg price", c$(avg), "per kWh")}</div>` };
   }
 
+  // evcc charge-limit slider: built once, value only updated when not being dragged
+  _limit() {
+    const h = this._hass, ev = this._config.evcc || {}, r = this.shadowRoot, s = h.states[ev.limit_set];
+    const wrap = r.getElementById("e-limw"); if (!wrap) return;
+    wrap.style.display = s ? "" : "none"; if (!s) return;
+    const inp = r.getElementById("lim"), out = r.getElementById("limv"), note = r.getElementById("limn");
+    const min = +s.attributes.min || 0, max = +s.attributes.max || 100, step = +s.attributes.step || 5;
+    if (!inp._wired) {
+      inp._wired = true; inp.min = min; inp.max = max; inp.step = step;
+      const show = () => { out.textContent = `${inp.value}%`; inp.style.setProperty("--p", `${((inp.value - min) / (max - min)) * 100}%`); };
+      inp.addEventListener("input", () => { this._drag = true; clearTimeout(this._dragT); show(); });
+      inp.addEventListener("change", () => { show(); this._call("number", "set_value", { entity_id: ev.limit_set, value: +inp.value }); this._dragT = setTimeout(() => { this._drag = false; this._limit(); }, 4000); });
+      inp._show = show;
+    }
+    if (!this._drag && s.state !== "unavailable" && s.state !== "unknown") { inp.value = Math.round(+s.state); inp._show(); }
+    const soc = stateNum(h, (this._config.car || {}).battery);
+    note.innerHTML = soc != null ? `Car is at <b>${Math.round(soc)}%</b> · evcc stops charging at the limit` : "evcc stops charging at the limit";
+  }
   async _click(e) {
     const m = e.target.closest("[data-more]");
     const a = e.target.closest("[data-act]");
@@ -2649,8 +2669,8 @@ const WPV_CSS = `
   .tset button { all: unset; cursor:pointer; width: 38px; height: 38px; border-radius: 10px; display:grid; place-items:center; background: var(--wp-card); border: 1px solid var(--wp-border); --mdc-icon-size: 17px; --lu-stroke: 2.4; }
   .tset b { min-width: 74px; text-align:center; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; } .tset b i { font-style: normal; font-size: 13px; color: var(--wp-muted); margin-left: 2px; }
   /* evcc */
-  .evcc .st { padding: 16px 14px; gap: 2px; } .evcc .st b { font-size: 22px; } .evcc .st span { font-size: 12.5px; }
-  .evcc .rate { padding: 26px 22px; } .evcc .kw b { font-size: 66px; } .evcc .seg2 button { padding: 14px 8px; } .evcc h5 { margin-top: 22px; }
+  .evcc .st { padding: 10px 12px; } .evcc .st b { font-size: 20px; }
+  .evcc .rate { padding: 16px 20px; margin-top: 16px; } .evcc .kw b { font-size: 54px; } .evcc h5 { margin: 14px 2px 7px; }
   .rate { flex:none; display:flex; align-items:center; gap: 18px; margin-top: 22px; padding: 18px 20px; border-radius: 20px; background: linear-gradient(135deg, rgba(34,211,238,.14), rgba(59,130,246,.10)); border: 1px solid rgba(34,211,238,.28); cursor: pointer; }
   .kw { display:flex; align-items:baseline; gap: 6px; } .kw b { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; } .kw span { font-size: 20px; font-weight: 700; color: var(--wp-muted); }
   .rt { display:flex; flex-direction:column; min-width:0; } .rt b { font-size: 17px; font-weight: 750; } .rt span { font-size: 13.5px; color: var(--wp-muted); }
@@ -2661,6 +2681,11 @@ const WPV_CSS = `
   .seg2 button b { font-size: 15.5px; font-weight: 750; } .seg2 button span { font-size: 12.5px; }
   .seg2 button.on { background: var(--wp-card); color: var(--wp-text); box-shadow: 0 2px 8px rgba(0,0,0,.18); } .seg2 button.on span { color: var(--wp-muted); }
   .lim { flex:none; margin: 8px 4px 0; font-size: 13px; color: var(--wp-muted); } .lim b { color: var(--wp-text); } .okc { color: #16a34a; font-weight: 700; } :host([dark]) .okc { color: #4ade80; }
+  .slim { flex:none; display:flex; align-items:center; gap: 16px; padding: 12px 16px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); }
+  .slim b { min-width: 58px; text-align:right; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .slim input { flex: 1; -webkit-appearance: none; appearance: none; height: 12px; border-radius: 99px; background: linear-gradient(90deg, #16a34a, #4ade80) 0/var(--p, 50%) 100% no-repeat, var(--wp-track); outline: none; margin: 0; }
+  .slim input::-webkit-slider-thumb { -webkit-appearance: none; width: 30px; height: 30px; border-radius: 50%; background: #fff; border: 3px solid #22c55e; box-shadow: 0 2px 8px rgba(0,0,0,.35); cursor: pointer; }
+  .slim input::-moz-range-thumb { width: 26px; height: 26px; border-radius: 50%; background: #fff; border: 3px solid #22c55e; cursor: pointer; }
   .stats { flex:none; display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; } .stats.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .st { display:flex; flex-direction:column; padding: 10px 12px; border-radius: 14px; background: var(--wp-card-2); border: 1px solid var(--wp-border); min-width:0; }
   .st span { font-size: 12px; color: var(--wp-muted); font-weight: 600; } .st b { font-size: 18px; font-weight: 800; white-space:nowrap; } .st small { font-size: 11.5px; color: var(--wp-muted); }
