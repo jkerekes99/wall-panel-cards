@@ -109,3 +109,7 @@ cameras:                         # 6 tiles in a 3×2 grid; summary panel on the 
 ```
 
 Security notes: `live_camera` (optional) is the stream the Live pop-up opens (e.g. the Reolink *Balanced* entity) while `camera` feeds the tile snapshots. Doorbell tiles (`type: doorbell`) take their preview from a short off-screen Live View after each ring/motion event (stored on the device); set `preview: camera` to use the camera's own snapshot instead.
+
+## wp-ev (Cars tab)
+
+Car panel (battery, range, location, doors, cabin/outside temperature, charge limit, sentry, tyres, odometer, wake & refresh, climate ± / start / stop) plus an evcc panel (charge rate, grid-charging price-limit presets, session and all-time stats). Keys: `car: { battery, range, charging, plugged, asleep, location, lock, inside_temp, outside_temp, charge_limit, sentry, odometer, tyres: [..], climate, wake, refresh, last_update, polling_interval }`, `evcc: { charge_power, charge_current, phases, charging, connected, price_limit, grid_price, smart_cost_active, mode, pv_status, session_energy, session_solar, session_cost, session_price_kwh, limit_soc, remaining, total_energy, avg_price, total_solar }`, optional `price_presets: [{ value: 0.05, label, sub }]`.
