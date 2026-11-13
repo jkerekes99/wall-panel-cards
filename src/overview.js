@@ -430,6 +430,7 @@ class WpSide extends WpBase {
 }
 const WP_SIDE_CSS = `
   :host { display:block; height:100%; } * { box-sizing:border-box; } button { font: inherit; color: inherit; }
+  #main { height: 100%; }
   .m-heat { --mc: var(--wp-heat); } .m-cool { --mc: var(--wp-cool); } .m-dry { --mc: var(--wp-dry); } .m-fan { --mc: var(--wp-fan); } .m-auto { --mc: var(--wp-auto); } .m-off { --mc: var(--wp-faint); }
   .col { height:100%; display:flex; flex-direction:column; gap: var(--wp-gap); }
   .card { background: var(--wp-card); border:1px solid var(--wp-border); border-radius: var(--wp-radius); box-shadow: var(--wp-shadow); }
