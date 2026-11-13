@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.4";
+const WP_VERSION = "0.9.5";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -851,24 +851,27 @@ class WpClimate extends HTMLElement {
     const tmr = this._timer(this._taskId(r.i));
     const canTemp = r.on && ["heat", "cool", "heat_cool", "auto"].includes(r.mode);
     const img = r.cfg.image;
+    const style = img ? (r.cfg.image_style || this._config.image_style || "fade") : "";
     const bg = img ? `<div class="rbg" style="background-image:url('${$esc(img)}');background-position:${$esc(r.cfg.image_position || "center 35%")}"></div>` : "";
-    return `<section class="room card m-${m} ${r.on ? "is-on" : ""} ${r.unavailable ? "unav" : ""} ${img ? "photo" : ""}" data-room="${r.i}">
-      ${bg}<div class="rhead">
-        <div class="rname">${icon(r.cfg.icon || "mdi:air-conditioner", "ricon")}<h3>${$esc(r.cfg.name)}</h3></div>
-        <button class="toggle ${r.on ? "on" : ""}" data-act="power" data-i="${r.i}" aria-label="Power"><span></span></button>
-      </div>
-      <div class="rbody" data-act="openroom" data-i="${r.i}">
-        <div class="rtemp">${fmt1(r.cur)}<i>°</i></div>
-        <div class="rmeta"><span>${icon("mdi:water-percent")}${r.hum == null ? "–" : Math.round(r.hum)}%</span>
-          ${tmr ? `<span class="tchip">${icon("mdi:timer-outline")}${tmr.off ? "Off" : "On"} in ${this._fmtLeft(tmr.left)}</span>` : ""}</div>
-        <div class="status m-${m}">${r.on ? icon(MODES[r.mode]?.icon || "mdi:air-conditioner") : ""}<span>${this._statusText(r)}</span></div>
-      </div>
-      <div class="rfoot">
+    const temp = `<div class="rtemp">${fmt1(r.cur)}<i>°</i></div>`;
+    const meta = `<div class="rmeta"><span>${icon("mdi:water-percent")}${r.hum == null ? "–" : Math.round(r.hum)}%</span>
+          ${tmr ? `<span class="tchip">${icon("mdi:timer-outline")}${tmr.off ? "Off" : "On"} in ${this._fmtLeft(tmr.left)}</span>` : ""}</div>`;
+    const status = `<div class="status m-${m}">${r.on ? icon(MODES[r.mode]?.icon || "mdi:air-conditioner") : ""}<span>${this._statusText(r)}</span></div>`;
+    const foot = `<div class="rfoot">
         ${canTemp ? `<button class="round" data-act="minus" data-i="${r.i}">${icon("mdi:minus")}</button>
           <div class="sp"><b>${fmtT(r.target, r.step)}°</b><small>set to</small></div>
           <button class="round" data-act="plus" data-i="${r.i}">${icon("mdi:plus")}</button>`
         : `<button class="more" data-act="openroom" data-i="${r.i}">${r.on ? "More controls" : "Tap the switch to turn on"}${icon("mdi:chevron-right")}</button>`}
+      </div>`;
+    const body = style === "glass"
+      ? `<div class="gap" data-act="openroom" data-i="${r.i}"></div><div class="gl"><div class="rbody" data-act="openroom" data-i="${r.i}">${temp}<div class="gside">${status}${meta}</div></div>${foot}</div>`
+      : `<div class="rbody" data-act="openroom" data-i="${r.i}">${temp}${meta}${status}</div>${foot}`;
+    return `<section class="room card m-${m} ${r.on ? "is-on" : ""} ${r.unavailable ? "unav" : ""} ${img ? `photo ${style}` : ""}" data-room="${r.i}">
+      ${bg}<div class="rhead">
+        <div class="rname">${icon(r.cfg.icon || "mdi:air-conditioner", "ricon")}<h3>${$esc(r.cfg.name)}</h3></div>
+        <button class="toggle ${r.on ? "on" : ""}" data-act="power" data-i="${r.i}" aria-label="Power"><span></span></button>
       </div>
+      ${body}
     </section>`;
   }
 
@@ -1093,27 +1096,41 @@ const WP_CLIMATE_CSS = `
   .room.is-on { border-color: color-mix(in srgb, var(--mc) 55%, var(--wp-border)); }
   .room.is-on::after { content:""; position:absolute; left:0; right:0; top:0; height: 4px; background: var(--mc); opacity:.9; }
   .room.unav { opacity: .55; }
-  /* photo background (rooms[].image): dark scrim + light text so it reads the same in light and dark themes */
-  .room.photo { color: #fff; border-color: rgba(255,255,255,.10); background: #111827; }
-  .room.photo.is-on { border-color: color-mix(in srgb, var(--mc) 70%, transparent); }
+  /* photo background (rooms[].image). The wash colour is the card colour of the current theme (navy in dark, white in light),
+     so the tile blends into the tab and text keeps the theme's own colours. image_style: fade (default) | glass */
+  :host([dark]) { --tint: 16, 27, 52; } :host(:not([dark])) { --tint: 255, 255, 255; }
+  .room.photo { background: rgb(var(--tint)); }
   .room.photo > :not(.rbg) { position: relative; z-index: 1; }
   .room.is-on::after { z-index: 2; }
-  .rbg { position:absolute; inset:0; z-index:0; background-size: cover; background-repeat: no-repeat; transition: filter .5s; }
-  .rbg::after { content:""; position:absolute; inset:0;
-    background: linear-gradient(180deg, rgba(6,10,20,.70) 0%, rgba(6,10,20,.20) 30%, rgba(6,10,20,.26) 52%, rgba(6,10,20,.86) 100%),
-                linear-gradient(90deg, rgba(6,10,20,.48) 0%, rgba(6,10,20,.06) 60%, rgba(6,10,20,0) 100%); }
-  .room.photo:not(.is-on) .rbg { filter: saturate(.4) brightness(.8); }
-  .room.photo h3, .room.photo .rtemp, .room.photo .rmeta, .room.photo .sp, .room.photo .more { text-shadow: 0 1px 2px rgba(0,0,0,.6), 0 0 12px rgba(0,0,0,.35); }
-  .room.photo .ricon { color: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
-  .room.photo.is-on .ricon { color: var(--mc); }
-  .room.photo .rtemp i, .room.photo .rmeta, .room.photo .sp small, .room.photo .more { color: rgba(255,255,255,.82); }
-  .room.photo .status { align-self: flex-start; padding: 6px 14px 6px 10px; border-radius: 999px; color: #fff; font-size: 18px;
-    background: color-mix(in srgb, var(--mc) 42%, rgba(10,14,24,.55)); border: 1px solid color-mix(in srgb, var(--mc) 65%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-  .room.photo .status.m-off { background: rgba(10,14,24,.5); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.85); }
-  .room.photo .round { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.30); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
-  .room.photo .round:active { background: rgba(255,255,255,.28); }
-  .room.photo .toggle:not(.on) { background: rgba(255,255,255,.26); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-  .room.photo .tchip { color: #fcd34d !important; }
+  .rbg { position:absolute; inset:0; z-index:0; background-size: cover; background-repeat: no-repeat; transition: filter .5s, opacity .5s; }
+  .rbg::after { content:""; position:absolute; inset:0; }
+  .room.photo:not(.is-on) .rbg { filter: saturate(.35); opacity: .8; }
+  .room.photo .toggle:not(.on) { background: color-mix(in srgb, var(--wp-faint) 50%, rgb(var(--tint))); }
+  .room.photo .round { background: rgba(var(--tint), .72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  .room.photo .status { align-self: flex-start; padding: 5px 13px 5px 9px; border-radius: 999px; font-size: 18px;
+    background: color-mix(in srgb, var(--mc) 16%, rgba(var(--tint), .85)); border: 1px solid color-mix(in srgb, var(--mc) 45%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .room.photo .status.m-off { background: rgba(var(--tint), .8); border-color: var(--wp-border); }
+  /* fade: photo shows top-right and melts into the card colour toward the text (left) and the controls (bottom) */
+  .room.fade .rbg::after { background:
+      linear-gradient(90deg, rgba(var(--tint),.96) 0%, rgba(var(--tint),.82) 28%, rgba(var(--tint),.30) 60%, rgba(var(--tint),0) 85%),
+      linear-gradient(0deg, rgba(var(--tint),.97) 0%, rgba(var(--tint),.70) 26%, rgba(var(--tint),0) 55%),
+      linear-gradient(180deg, rgba(var(--tint),.60) 0%, rgba(var(--tint),0) 28%); }
+  .room.fade h3, .room.fade .rtemp, .room.fade .rmeta, .room.fade .sp { text-shadow: 0 0 12px rgba(var(--tint), .95), 0 0 3px rgba(var(--tint), .8); }
+  /* glass: full photo, name and controls on frosted card-coloured glass */
+  .room.glass { padding: 14px; }
+  .room.glass .rbg::after { background: linear-gradient(180deg, rgba(var(--tint),.25) 0%, rgba(var(--tint),0) 35%); }
+  .room.glass .rname { padding: 6px 16px 6px 10px; border-radius: 999px; }
+  .room.glass .rname, .room.glass .gl { background: rgba(var(--tint), .68); border: 1px solid rgba(var(--tint), .5); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); box-shadow: 0 6px 20px rgba(0,0,0,.15); }
+  .room.glass h3 { font-size: 21px; }
+  .room.glass .gap { flex: 1; cursor: pointer; }
+  .room.glass .gl { border-radius: 20px; padding: 12px 14px; display:flex; flex-direction:column; gap: 8px; }
+  .room.glass .rbody { flex: none; flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; }
+  .room.glass .rtemp { font-size: 52px; }
+  .room.glass .gside { display:flex; flex-direction:column; align-items:flex-end; gap: 6px; }
+  .room.glass .status { align-self: auto; font-size: 16px; }
+  .room.glass .rmeta { font-size: 16px; }
+  .room.glass .rfoot { min-height: 56px; } .room.glass .round { width: 56px; height: 56px; background: rgba(var(--tint), .6); }
+  .room.glass .more { padding: 10px 0; }
   .rhead { display:flex; align-items:center; justify-content:space-between; gap: 10px; }
   .rname { display:flex; align-items:center; gap: 12px; min-width:0; }
   .ricon { --mdc-icon-size: 30px; color: var(--mc); }
