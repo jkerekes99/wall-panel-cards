@@ -113,7 +113,7 @@ const WPE_CSS = `
 
 /* ---------------- wp-energy ---------------- */
 class WpEnergy extends WpEnergyBase {
-  setConfig(config) { super.setConfig(config); if (!this._view) this._view = config.default_view === "flow" ? "flow" : "devices"; }
+  setConfig(config) { super.setConfig(config); if (!this._view) this._view = config.default_view === "today" ? "today" : "devices"; }
   getCardSize() { return 12; }
   _ids() { const c = this._config, p = c.power || {}, e = c.energy || {}; return [p.solar, p.grid_import, p.grid_export, p.home, p.ev, e.generation, e.import, e.export, c.theme_entity, ...(this._view === "devices" ? (c.devices || []).map((d) => d.entity) : [])]; }
   async _loadStats() {
@@ -124,8 +124,19 @@ class WpEnergy extends WpEnergyBase {
       const g = hs[e.generation], i = hs[e.import], x = hs[e.export];
       const home = g && i && x ? { t: g.t.map((v, k) => Math.max(0, v + i.t[k] - x.t[k])), y: g.y.map((v, k) => Math.max(0, v + i.y[k] - x.y[k])) } : null;
       this._stats = { g, i, x, home, cost: hs[e.import_cost], comp: hs[e.export_comp], mCost: mo[e.import_cost], mComp: mo[e.export_comp] };
+      this._devE = await this._deviceEnergy();
       this._statsAt = Date.now(); this._sig = null; if (this.shadowRoot) this._render();
     } catch (err) { console.warn("wp-energy stats", err); }
+  }
+  // today's energy per device, from the Energy dashboard's "Individual devices" list (same statistics as the stock dashboard)
+  async _deviceEnergy() {
+    try {
+      if (!this._prefs) this._prefs = await this._hass.callWS({ type: "energy/get_prefs" });
+      const devs = this._prefs?.device_consumption || []; if (!devs.length) return [];
+      const ids = devs.map((d) => d.stat_consumption);
+      const r = await this._hass.callWS({ type: "recorder/statistics_during_period", start_time: wpeDay0().toISOString(), end_time: new Date().toISOString(), statistic_ids: ids, period: "hour", types: ["change"], units: { energy: "kWh" } });
+      return devs.map((d) => ({ stat: d.stat_consumption, name: d.name, kwh: (r[d.stat_consumption] || []).reduce((a, p) => a + Math.max(0, p.change || 0), 0) }));
+    } catch (err) { console.warn("wp-energy device energy", err); this._prefs = null; return this._devE || null; }
   }
   _render() {
     const h = this._hass, c = this._config, r = this.shadowRoot, st = this._stats;
@@ -135,10 +146,10 @@ class WpEnergy extends WpEnergyBase {
       r.innerHTML = `<style>${WP_PALETTE}${WPE_CSS}${WPE_ENERGY_CSS}</style>
       <div class="wrap en">
         <section class="panel flow">
-          <div class="ph"><div class="pt">${icon("lu:zap")}<div><h2>${this._view === "devices" ? "Device Power" : "Current Flow"}</h2><p id="fsub"></p></div></div>
-            <span class="chip live"><i></i>Live</span></div>
-          <div class="seg wide"><button data-view="devices" class="${this._view === "devices" ? "on" : ""}">${icon("lu:list")}Devices</button><button data-view="flow" class="${this._view === "flow" ? "on" : ""}">${icon("lu:activity")}Flow</button></div>
-          <div class="fbody">${this._view === "devices" ? `<div class="dbody" id="fbody"></div>` : `<svg class="fsvg" viewBox="0 0 400 452" preserveAspectRatio="xMidYMid meet"><g id="flines"></g><g id="fnodes"></g><g id="flabels"></g></svg><div class="toplist" id="ftop"></div>`}</div>
+          <div class="ph"><div class="pt">${icon(this._view === "devices" ? "lu:zap" : "lu:calendar-days")}<div><h2>${this._view === "devices" ? "Device Power" : "Device Energy"}</h2><p id="fsub"></p></div></div>
+            ${this._view === "devices" ? `<span class="chip live"><i></i>Live</span>` : ""}</div>
+          <div class="seg wide"><button data-view="devices" class="${this._view === "devices" ? "on" : ""}">${icon("lu:zap")}Live power</button><button data-view="today" class="${this._view === "today" ? "on" : ""}">${icon("lu:calendar-days")}Today's energy</button></div>
+          <div class="fbody"><div class="dbody" id="fbody"></div></div>
         </section>
         <section class="panel today">
           <div class="ph"><div class="pt">${icon("lu:clock")}<div><h2>Energy Today</h2><p id="tsub"></p></div></div>
@@ -154,13 +165,11 @@ class WpEnergy extends WpEnergyBase {
     const p = c.power || {}, en = c.energy || {};
     const solar = Math.max(0, stateNum(h, p.solar) ?? 0), imp = Math.max(0, stateNum(h, p.grid_import) ?? 0), exp = Math.max(0, stateNum(h, p.grid_export) ?? 0);
     const home = Math.max(0, stateNum(h, p.home) ?? solar + imp - exp), ev = Math.max(0, stateNum(h, p.ev) ?? 0);
-    const gridW = imp > 20 ? imp : exp > 20 ? -exp : 0;
-    set("fsub", $esc(this._view === "devices" ? this._devSub(home) : c.source || "Live from the solar inverter"));
-    if (this._view === "devices") set("fbody", this._devices(home));
-    else { const f = this._flow(solar, home, gridW, ev); set("flines", f.lines); set("fnodes", f.nodes); set("flabels", f.labels); set("ftop", this._top()); }
     // today totals (sensor state = today so far)
     const genT = stateNum(h, en.generation), impT = stateNum(h, en.import), expT = stateNum(h, en.export);
     const homeT = genT != null && impT != null && expT != null ? Math.max(0, genT + impT - expT) : null;
+    if (this._view === "devices") { set("fsub", $esc(this._devSub(home))); set("fbody", this._devices(home)); }
+    else { set("fsub", this._todaySub(homeT)); set("fbody", this._devToday(homeT)); }
     set("tsub", homeT != null ? `Home used <b>${kWh(homeT)} kWh</b> so far today` : "");
     set("chart", st?.g ? this._chart(st) : "");
     const yd = (a) => (a ? `Yesterday ${kWh(wpeSum(a.y))} kWh` : "");
@@ -185,35 +194,6 @@ class WpEnergy extends WpEnergyBase {
       + money(en.export_comp, icon("lu:circle-dollar-sign", "ti g"), "Export Earnings", compT, expT != null ? `${kWh(expT)} kWh${cents(compT, expT) ? ` × ${cents(compT, expT)}` : ""}` : "", st?.mComp, "g")
       + money(en.import_cost, icon("lu:circle-dollar-sign", "ti p"), "Import Cost", costT, impT != null ? `${kWh(impT)} kWh${cents(costT, impT) ? ` · avg ${cents(costT, impT)}/kWh` : ""}` : "", st?.mCost, ""));
   }
-  _flow(solar, home, gridW, ev) {
-    const c = this._config;
-    const band = (w) => (w > 20 ? Math.max(0.8, Math.min(5, 3.6 / Math.sqrt(Math.max(w, 30) / 1000))).toFixed(1) : "0");
-    const line = (d, w, color, rev) => { const b = band(w); return b === "0" ? `<path d="${d}" class="fl idle"/>` : `<path d="${d}" class="fl" style="stroke:${color}"/>${[0, 1, 2].map((k) => `<circle r="4.5" fill="${color}" class="dot" style="color:${color}"><animateMotion dur="${b}s" begin="-${((k * b) / 3).toFixed(2)}s" repeatCount="indefinite" path="${d}" ${rev ? 'keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ""}/></circle>`).join("")}`; };
-    // portrait layout: solar on top, home in the middle, EV charger and grid below
-    const H = [200, 222], S = [200, 58], E = [92, 362], G = [308, 362];
-    const node = (xy, r, color, inner, on, cls = "") => `<g class="node ${on ? "on" : ""} ${cls}" style="--nc:${color}"><circle cx="${xy[0]}" cy="${xy[1]}" r="${r + 10}" class="halo"/><circle cx="${xy[0]}" cy="${xy[1]}" r="${r}" class="ring"/>
-      <foreignObject x="${xy[0] - r}" y="${xy[1] - r}" width="${r * 2}" height="${r * 2}"><div class="ni">${inner}</div></foreignObject></g>`;
-    const lab = (x, y, val, sub, cls, anchor = "middle") => `<text x="${x}" y="${y}" text-anchor="${anchor}" class="nv">${kW(val)}<tspan class="nu"> kW</tspan></text><text x="${x}" y="${y + 21}" text-anchor="${anchor}" class="ns ${cls}">${$esc(sub)}</text>`;
-    const evOn = ev > 50, gImp = gridW > 0, gExp = gridW < 0, sOn = solar > 50;
-    const night = this._hass.states["sun.sun"]?.state === "below_horizon";
-    const toward = (a, b, ra, rb) => { const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy); return `M${(a[0] + (dx / L) * ra).toFixed(1)},${(a[1] + (dy / L) * ra).toFixed(1)} L${(b[0] - (dx / L) * rb).toFixed(1)},${(b[1] - (dy / L) * rb).toFixed(1)}`; };
-    return {
-      lines: line(toward(S, H, 38, 54), solar, WPE_C.solar) + line(toward(H, E, 54, 42), ev, WPE_C.ev) + line(toward(G, H, 42, 54), Math.abs(gridW), gExp ? WPE_C.exp : WPE_C.imp, gExp),
-      nodes: node(S, 28, WPE_C.solar, WP_SUN_ICON, sOn, "sun") + node(H, 44, WPE_C.home, icon("lu:house"), true, "hub") + node(E, 32, WPE_C.ev, icon("lu:plug-zap"), evOn) + node(G, 32, gExp ? WPE_C.exp : WPE_C.imp, WP_PYLON_ICON, gImp || gExp),
-      labels: lab(S[0] + 46, S[1] - 4, solar, sOn ? "Solar · generating" : night ? "Solar · night" : "Solar · idle", sOn ? "y" : "", "start")
-        + lab(H[0] + 64, H[1] - 4, home, "Home", "", "start")
-        + lab(E[0], E[1] + 66, ev, `${c.ev_name || "EV charger"} · ${evOn ? "charging" : "idle"}`, evOn ? "c" : "")
-        + lab(G[0], G[1] + 66, Math.abs(gridW), gImp ? "Grid · importing" : gExp ? "Grid · exporting" : "Grid · idle", gImp ? "p" : gExp ? "g" : ""),
-    };
-  }
-  // the biggest loads right now (shown under the flow diagram)
-  _top() {
-    const h = this._hass, c = this._config, n = c.top_devices ?? 4;
-    const rows = (c.devices || []).map((d) => ({ ...d, w: Math.max(0, stateNum(h, d.entity) || 0) })).filter((d) => d.w >= 5).sort((a, b) => b.w - a.w).slice(0, n);
-    const max = Math.max(...rows.map((d) => d.w), 1);
-    const fmtW = (w) => (w >= 1000 ? `${(w / 1000).toFixed(2)} kW` : `${Math.round(w)} W`);
-    return `<h5>Biggest loads now</h5>${rows.length ? rows.map((d) => `<div class="dv on" data-more="${$esc(d.entity)}" style="--dc:${d.color || WPE_C.home}"><span class="dvi">${icon(d.icon || "mdi:flash")}</span><div class="dvb"><div class="dvt"><span>${$esc(d.name)}</span><b>${fmtW(d.w)}</b></div><div class="dvbar"><i style="width:${(d.w / max) * 100}%"></i></div></div></div>`).join("") : `<p class="none">Nothing significant running</p>`}`;
-  }
   _devSub(total) {
     const h = this._hass, tracked = (this._config.devices || []).reduce((a, d) => a + Math.max(0, stateNum(h, d.entity) || 0), 0), other = total - tracked;
     return `Live power by circuit${other > 30 ? ` · ${Math.round(other).toLocaleString("en-AU")} W on other circuits` : ""}`;
@@ -231,6 +211,28 @@ class WpEnergy extends WpEnergyBase {
       <div class="dvbar">${ticks}<i style="width:${L(d.w || 0) * 100}%"></i></div></div></div>`; };
     return `<div class="dtot" data-more="${$esc(c.power?.home || "")}"><span class="dvi big">${icon("lu:house")}</span><div class="dvb"><div class="dvt"><span>Total consumption</span><b>${fmtW(total)}</b></div>
         <div class="dvbar tot">${ticks}<i style="width:${L(total) * 100}%"></i></div></div></div>
+      <div class="dlist">${rows.map(row).join("")}</div>`;
+  }
+  _todaySub(total) {
+    const d = this._devE; if (d == null) return "Loading…";
+    const tracked = d.reduce((a, x) => a + x.kwh, 0), other = total != null ? total - tracked : 0;
+    return `Today so far${other > 0.05 ? ` · <b>${kWh(other)} kWh</b> untracked` : ""}`;
+  }
+  _devToday(total) {
+    const c = this._config, d = this._devE;
+    if (d == null) return `<p class="none">Loading…</p>`;
+    if (!d.length) return `<p class="none">No individual devices are set up in the Energy dashboard.</p>`;
+    const look = (name) => (c.devices || []).find((x) => (x.name || "").toLowerCase() === (name || "").toLowerCase()) || {};
+    const fmt = (v) => (v == null ? "–" : v >= 10 ? v.toFixed(1) : v.toFixed(2));
+    const max = Math.max(total || 0, ...d.map((x) => x.kwh), 0.01);
+    const rows = d.map((x, k) => { const l = look(x.name); return { ...x, k, icon: l.icon, color: l.color, name: x.name || l.name || this._hass.states[x.stat]?.attributes.friendly_name || x.stat }; })
+      .sort((a, b) => b.kwh - a.kwh || a.k - b.k);
+    const pct = (v) => (total > 0.05 ? `<small>${Math.round((v / total) * 100)}%</small>` : "");
+    const row = (x) => { const on = x.kwh >= 0.01, col = x.color || WPE_C.home; return `<div class="dv ${on ? "on" : ""}" data-more="${$esc(x.stat)}" style="--dc:${col}">
+      <span class="dvi">${icon(x.icon || "mdi:flash")}</span><div class="dvb"><div class="dvt"><span>${$esc(x.name)}</span><b>${pct(x.kwh)}${fmt(x.kwh)} kWh</b></div>
+      <div class="dvbar"><i style="width:${(x.kwh / max) * 100}%"></i></div></div></div>`; };
+    return `<div class="dtot" data-more="${$esc(c.power?.home || "")}"><span class="dvi big">${icon("lu:house")}</span><div class="dvb"><div class="dvt"><span>Total consumption</span><b>${fmt(total)} kWh</b></div>
+        <div class="dvbar tot"><i style="width:${total ? (total / max) * 100 : 0}%"></i></div></div></div>
       <div class="dlist">${rows.map(row).join("")}</div>`;
   }
   _chart(st) {
@@ -265,22 +267,7 @@ const WPE_ENERGY_CSS = `
   .pt h2 + p b, #tsub b { color: var(--wp-text); }
   .flow .pt > svg.lu { color: ${WPE_C.solar}; } .today .pt > svg.lu { color: var(--wp-text); }
   .fbody { flex: 1 1 0; min-height: 0; display:flex; flex-direction:column; margin-top: 8px; }
-  .fsvg { flex: 1 1 0; min-height: 0; width: 100%; overflow: visible; }
   .dbody { flex: 1 1 0; min-height: 0; display:flex; flex-direction:column; }
-  .toplist { flex: none; display:flex; flex-direction:column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--wp-border); }
-  .toplist h5 { margin: 0; font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--wp-muted); } .toplist .none { margin: 0; font-size: 14px; color: var(--wp-muted); }
-  .fl { fill:none; stroke-width: 3.5; stroke-linecap: round; opacity: .55; } .fl.idle { stroke: var(--wp-track); opacity: 1; stroke-dasharray: 2 7; }
-  .dot { filter: drop-shadow(0 0 5px currentColor); }
-  .node .halo { fill: color-mix(in srgb, var(--nc) 10%, transparent); stroke: none; }
-  .node .ring { fill: color-mix(in srgb, var(--nc) 14%, var(--wp-card)); stroke: color-mix(in srgb, var(--nc) 45%, transparent); stroke-width: 2.5; }
-  .node.on .ring { stroke: var(--nc); filter: drop-shadow(0 0 9px color-mix(in srgb, var(--nc) 75%, transparent)); }
-  .node.on .halo { fill: color-mix(in srgb, var(--nc) 18%, transparent); }
-  .ni { width:100%; height:100%; display:grid; place-items:center; color: var(--nc); }
-  .ni svg { width: 56%; height: 56%; } .ni svg.lu { --lu-stroke: 2; } .sun .ni svg { width: 78%; height: 78%; overflow: visible; }
-  .node:not(.on) .ni { opacity: .55; } .node:not(.on).sun .ni svg { filter: grayscale(1); }
-  .hub .ni svg { width: 50%; height: 50%; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--nc) 80%, transparent)); }
-  .nv { font-size: 24px; font-weight: 800; fill: var(--wp-text); font-variant-numeric: tabular-nums; } .nu { font-size: 13px; font-weight: 700; fill: var(--wp-muted); }
-  .ns { font-size: 14px; font-weight: 600; fill: var(--wp-muted); } .ns.y { fill: #f59e0b; } .ns.p { fill: ${WPE_C.imp}; } .ns.g { fill: ${WPE_C.exp}; } .ns.c { fill: #06b6d4; }
   /* devices */
   .dtot { flex: none; display:flex; align-items:center; gap: 12px; padding: 2px 2px 9px; border-bottom: 1px solid var(--wp-border); cursor: pointer; }
   .dtot .dvb { flex: 1; } .dtot .dvt b { font-size: 19px; } .dtot .dvt span { font-size: 15px; font-weight: 700; }
@@ -295,6 +282,8 @@ const WPE_ENERGY_CSS = `
   .dvbar { position:relative; margin-top: 4px; height: 6px; border-radius: 99px; background: var(--wp-track); overflow: hidden; }
   .dvbar i { position:absolute; left:0; top:0; bottom:0; border-radius: 99px; background: linear-gradient(90deg, color-mix(in srgb, var(--dc, ${WPE_C.home}) 55%, transparent), var(--dc, ${WPE_C.home})); }
   .dvbar.tot { height: 8px; } .dvbar.tot i { background: linear-gradient(90deg, #0ea5e9, ${WPE_C.home}); box-shadow: 0 0 10px rgba(56,189,248,.5); }
+  .dvt b small { font-size: 12.5px; font-weight: 600; color: var(--wp-muted); margin-right: 8px; }
+  .dbody .none { margin: 12px 2px; font-size: 15px; color: var(--wp-muted); }
   .dvbar em { position:absolute; top: 0; bottom: 0; width: 1px; background: var(--wp-card); opacity: .7; z-index: 1; }
   .big.g { color: ${WPE_C.exp}; }
   .unit { position:absolute; left: 0; top: -12px; font-size: 11px; color: var(--wp-faint); }
