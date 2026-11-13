@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.5";
+const WP_VERSION = "0.9.6";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1559,10 +1559,11 @@ class WpSide extends WpBase {
   _tvHtml(tv) {
     const a = tv.attributes; const playing = tv.state === "playing";
     return `<section class="card tv">
-      ${a.entity_picture ? `<div class="tvbg" style="background-image:url('${$esc(a.entity_picture)}')"></div>` : ""}
       <div class="tvc">
-        <div class="tvh">${icon("mdi:television-play")}<span>${$esc(this._config.tv.name || a.friendly_name)} · ${$esc(a.app_name || a.source || tv.state)}</span></div>
-        <b class="tvt">${$esc(a.media_title || (tv.state === "idle" ? "Home screen" : "On"))}</b><small>${$esc(a.media_artist || a.media_series_title || "")}</small>
+        <div class="tvtop"><div class="tvtx">
+          <div class="tvh">${icon("mdi:television-play")}<span>${$esc(this._config.tv.name || a.friendly_name)} · ${$esc(a.app_name || a.source || tv.state)}</span></div>
+          <b class="tvt">${$esc(a.media_title || (tv.state === "idle" ? "Home screen" : "On"))}</b><small>${$esc(a.media_artist || a.media_series_title || "")}</small>
+        </div>${a.entity_picture ? `<img class="tvart" src="${$esc(a.entity_picture)}" alt="" onerror="this.remove()">` : ""}</div>
         <div class="tvb">
           <button class="rb" data-tv="media_previous_track">${icon("mdi:skip-previous")}</button>
           <button class="rb main" data-tv="media_play_pause">${icon(playing ? "mdi:pause" : "mdi:play")}</button>
@@ -1641,7 +1642,9 @@ const WP_SIDE_CSS = `
   .pi { flex:1; min-width: 0; display:flex; flex-direction:column; } .pi b { font-size: 19px; } .pi span { font-size: 15px; font-weight: 600; line-height: 1.2; padding-right: 4px; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; } .home .pi span { color: var(--wp-ok); } .away .pi span { color: var(--wp-warn); }
   .pi small { color: var(--wp-muted); font-size: 13px; } .pin { color: var(--wp-muted); position: absolute; top: 10px; right: 10px; --mdc-icon-size: 19px; }
   .tv { position: relative; overflow:hidden; padding: 0; min-height: 150px; flex: none; }
-  .tvbg { position:absolute; inset: 0; background-size: cover; background-position: center; filter: blur(18px) saturate(1.3); opacity: .45; transform: scale(1.2); }
+  .tvtop { display:flex; align-items:flex-start; gap: 12px; }
+  .tvtx { flex: 1; min-width: 0; display:flex; flex-direction:column; gap: 2px; }
+  .tvart { flex: none; height: 74px; width: auto; max-width: 132px; object-fit: cover; border-radius: 10px; border: 1px solid var(--wp-border); box-shadow: 0 4px 14px rgba(0,0,0,.25); background: var(--wp-card-2); }
   .tvc { position: relative; padding: 14px 16px; display:flex; flex-direction:column; gap: 2px; }
   .tvh { display:flex; align-items:center; gap: 8px; color: var(--wp-muted); font-size: 14px; font-weight: 600; } .tvh ha-icon { --mdc-icon-size: 20px; color: var(--wp-accent); }
   .tvt { font-size: 20px; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; } .tvc small { color: var(--wp-muted); font-size: 14px; min-height: 18px; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; }
