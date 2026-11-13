@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.8";
+const WP_VERSION = "0.9.9";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1544,12 +1544,13 @@ class WpSide extends WpBase {
   async _pmMap() {
     const pm = this._pm, box = this.shadowRoot.getElementById("pmm"); if (!pm || !box) return;
     const c = this._config, p = c.people[pm.i];
+    pm.dark = this.hasAttribute("dark");   // follow the wall panel's own light/dark setting, not HA's profile theme
     await new Promise((res) => requestAnimationFrame(res));
     const w = box.clientWidth || 700, hgt = box.clientHeight || 500;
     try {
       const helpers = await window.loadCardHelpers();
       if (this._pm !== pm) return;
-      const card = helpers.createCardElement({ type: "map", entities: [{ entity: p.entity }, { entity: c.home_zone || "zone.home" }], default_zoom: p.zoom || c.map_zoom || 14, hours_to_show: p.hours_to_show ?? c.map_hours ?? 0, theme_mode: c.map_theme || "auto", aspect_ratio: `${((hgt / w) * 100).toFixed(1)}%` });
+      const card = helpers.createCardElement({ type: "map", entities: [{ entity: p.entity }, { entity: c.home_zone || "zone.home" }], default_zoom: p.zoom || c.map_zoom || 14, hours_to_show: p.hours_to_show ?? c.map_hours ?? 0, theme_mode: c.map_theme || (pm.dark ? "dark" : "light"), aspect_ratio: `${((hgt / w) * 100).toFixed(1)}%` });
       card.hass = this._hass; this._pmCard = card;
       box.innerHTML = ""; box.appendChild(card);
     } catch (e) { box.innerHTML = `<p class="pmerr">Map unavailable</p>`; }
@@ -1558,6 +1559,7 @@ class WpSide extends WpBase {
     const pm = this._pm, h = this._hass, c = this._config; if (!pm) return;
     const r = this.shadowRoot, p = c.people[pm.i], s = h.states[pm.entity]; if (!s) return;
     if (this._pmCard) this._pmCard.hass = h;
+    if (this._pmCard && pm.dark !== this.hasAttribute("dark")) { this._pmCard = null; this._pmMap(); }
     const a = s.attributes, home = s.state === "home";
     const where = home ? "Home" : s.state === "not_home" ? "Away" : s.state;
     const pic = a.entity_picture;
