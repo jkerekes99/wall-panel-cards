@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.3";
+const WP_VERSION = "0.9.4";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -850,8 +850,10 @@ class WpClimate extends HTMLElement {
     const m = r.on ? MODES[r.mode]?.c || "auto" : "off";
     const tmr = this._timer(this._taskId(r.i));
     const canTemp = r.on && ["heat", "cool", "heat_cool", "auto"].includes(r.mode);
-    return `<section class="room card m-${m} ${r.on ? "is-on" : ""} ${r.unavailable ? "unav" : ""}" data-room="${r.i}">
-      <div class="rhead">
+    const img = r.cfg.image;
+    const bg = img ? `<div class="rbg" style="background-image:url('${$esc(img)}');background-position:${$esc(r.cfg.image_position || "center 35%")}"></div>` : "";
+    return `<section class="room card m-${m} ${r.on ? "is-on" : ""} ${r.unavailable ? "unav" : ""} ${img ? "photo" : ""}" data-room="${r.i}">
+      ${bg}<div class="rhead">
         <div class="rname">${icon(r.cfg.icon || "mdi:air-conditioner", "ricon")}<h3>${$esc(r.cfg.name)}</h3></div>
         <button class="toggle ${r.on ? "on" : ""}" data-act="power" data-i="${r.i}" aria-label="Power"><span></span></button>
       </div>
@@ -1091,6 +1093,27 @@ const WP_CLIMATE_CSS = `
   .room.is-on { border-color: color-mix(in srgb, var(--mc) 55%, var(--wp-border)); }
   .room.is-on::after { content:""; position:absolute; left:0; right:0; top:0; height: 4px; background: var(--mc); opacity:.9; }
   .room.unav { opacity: .55; }
+  /* photo background (rooms[].image): dark scrim + light text so it reads the same in light and dark themes */
+  .room.photo { color: #fff; border-color: rgba(255,255,255,.10); background: #111827; }
+  .room.photo.is-on { border-color: color-mix(in srgb, var(--mc) 70%, transparent); }
+  .room.photo > :not(.rbg) { position: relative; z-index: 1; }
+  .room.is-on::after { z-index: 2; }
+  .rbg { position:absolute; inset:0; z-index:0; background-size: cover; background-repeat: no-repeat; transition: filter .5s; }
+  .rbg::after { content:""; position:absolute; inset:0;
+    background: linear-gradient(180deg, rgba(6,10,20,.70) 0%, rgba(6,10,20,.20) 30%, rgba(6,10,20,.26) 52%, rgba(6,10,20,.86) 100%),
+                linear-gradient(90deg, rgba(6,10,20,.48) 0%, rgba(6,10,20,.06) 60%, rgba(6,10,20,0) 100%); }
+  .room.photo:not(.is-on) .rbg { filter: saturate(.4) brightness(.8); }
+  .room.photo h3, .room.photo .rtemp, .room.photo .rmeta, .room.photo .sp, .room.photo .more { text-shadow: 0 1px 2px rgba(0,0,0,.6), 0 0 12px rgba(0,0,0,.35); }
+  .room.photo .ricon { color: #fff; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+  .room.photo.is-on .ricon { color: var(--mc); }
+  .room.photo .rtemp i, .room.photo .rmeta, .room.photo .sp small, .room.photo .more { color: rgba(255,255,255,.82); }
+  .room.photo .status { align-self: flex-start; padding: 6px 14px 6px 10px; border-radius: 999px; color: #fff; font-size: 18px;
+    background: color-mix(in srgb, var(--mc) 42%, rgba(10,14,24,.55)); border: 1px solid color-mix(in srgb, var(--mc) 65%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .room.photo .status.m-off { background: rgba(10,14,24,.5); border-color: rgba(255,255,255,.18); color: rgba(255,255,255,.85); }
+  .room.photo .round { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.30); color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.35); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .room.photo .round:active { background: rgba(255,255,255,.28); }
+  .room.photo .toggle:not(.on) { background: rgba(255,255,255,.26); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  .room.photo .tchip { color: #fcd34d !important; }
   .rhead { display:flex; align-items:center; justify-content:space-between; gap: 10px; }
   .rname { display:flex; align-items:center; gap: 12px; min-width:0; }
   .ricon { --mdc-icon-size: 30px; color: var(--mc); }
