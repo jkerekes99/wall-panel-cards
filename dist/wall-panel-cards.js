@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.7";
+const WP_VERSION = "0.9.8";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -1515,10 +1515,74 @@ class WpSide extends WpBase {
     const h = this._hass, c = this._config;
     const tv = c.tv && h.states[c.tv.media_player];
     const tvOn = tv && TV_ACTIVE.includes(tv.state);
-    if (!this._setHtml(`<style>${WP_PALETTE}${WP_SIDE_CSS}</style>
-      <div class="col">${this._climateHtml()}${this._peopleHtml()}${tvOn ? this._tvHtml(tv) : ""}</div>
-      ${this._tvModal && tvOn ? this._remoteHtml(tv) : ""}`)) return;
+    const r = this.shadowRoot;
+    if (!this._main) {
+      r.innerHTML = `<style>${WP_PALETTE}${WP_SIDE_CSS}</style><div id="main"></div><div id="pmap"></div>`;
+      this._main = r.getElementById("main"); this._lastHtml = null;
+    }
+    if (this._pm) this._pmUpdate();
+    const html = `<div class="col">${this._climateHtml()}${this._peopleHtml()}${tvOn ? this._tvHtml(tv) : ""}</div>
+      ${this._tvModal && tvOn ? this._remoteHtml(tv) : ""}`;
+    if (html === this._lastHtml) return;
+    this._lastHtml = html; this._main.innerHTML = html;
     this._bind();
+  }
+  /* ---------- person location dialog (built-in; replaces the Bubble Card map pop-ups) ---------- */
+  _pmOpen(i) {
+    const p = (this._config.people || [])[i]; if (!p) return;
+    this._pm = { i, entity: p.entity };
+    const host = this.shadowRoot.getElementById("pmap");
+    host.innerHTML = `<div class="scrim pm-in" data-pm="close"></div>
+      <div class="sheet pmap pm-in"><header class="sh" id="pmh"></header>
+        <div class="pmb"><div class="mapbox" id="pmm"></div><div class="pminfo" id="pmi"></div></div></div>`;
+    host.querySelectorAll("[data-pm]").forEach((el) => el.addEventListener("click", (e) => { if (e.target.closest("[data-pm]") === el) this._pmClose(); }));
+    host.querySelector(".sheet").addEventListener("click", (e) => { const x = e.target.closest("[data-pm]"); if (x) this._pmClose(); });
+    this._pmUpdate();
+    this._pmMap();
+  }
+  _pmClose() { this._pm = null; this._pmCard = null; const host = this.shadowRoot.getElementById("pmap"); if (host) host.innerHTML = ""; }
+  async _pmMap() {
+    const pm = this._pm, box = this.shadowRoot.getElementById("pmm"); if (!pm || !box) return;
+    const c = this._config, p = c.people[pm.i];
+    await new Promise((res) => requestAnimationFrame(res));
+    const w = box.clientWidth || 700, hgt = box.clientHeight || 500;
+    try {
+      const helpers = await window.loadCardHelpers();
+      if (this._pm !== pm) return;
+      const card = helpers.createCardElement({ type: "map", entities: [{ entity: p.entity }, { entity: c.home_zone || "zone.home" }], default_zoom: p.zoom || c.map_zoom || 14, hours_to_show: p.hours_to_show ?? c.map_hours ?? 0, theme_mode: c.map_theme || "auto", aspect_ratio: `${((hgt / w) * 100).toFixed(1)}%` });
+      card.hass = this._hass; this._pmCard = card;
+      box.innerHTML = ""; box.appendChild(card);
+    } catch (e) { box.innerHTML = `<p class="pmerr">Map unavailable</p>`; }
+  }
+  _pmUpdate() {
+    const pm = this._pm, h = this._hass, c = this._config; if (!pm) return;
+    const r = this.shadowRoot, p = c.people[pm.i], s = h.states[pm.entity]; if (!s) return;
+    if (this._pmCard) this._pmCard.hass = h;
+    const a = s.attributes, home = s.state === "home";
+    const where = home ? "Home" : s.state === "not_home" ? "Away" : s.state;
+    const pic = a.entity_picture;
+    const z = h.states[c.home_zone || "zone.home"]?.attributes || {};
+    let dist = null;
+    if (a.latitude != null && z.latitude != null) {
+      const R = 6371, rad = (d) => (d * Math.PI) / 180, dLa = rad(a.latitude - z.latitude), dLo = rad(a.longitude - z.longitude);
+      const q = Math.sin(dLa / 2) ** 2 + Math.cos(rad(z.latitude)) * Math.cos(rad(a.latitude)) * Math.sin(dLo / 2) ** 2;
+      dist = 2 * R * Math.asin(Math.sqrt(q));
+    }
+    const since = new Date(s.last_changed);
+    const sinceTxt = `${since.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}${since.toDateString() === new Date().toDateString() ? "" : ` · ${since.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`}`;
+    const src = a.source ? h.states[a.source] : null;
+    const row = (ic, label, val, cls = "") => `<div class="pmr ${cls}">${icon(ic)}<div><small>${label}</small><b>${val}</b></div></div>`;
+    const head = `<div class="ttl"><div class="av ${home ? "home" : "away"}">${pic ? `<img src="${$esc(pic)}" alt="">` : icon("mdi:account")}<i></i></div>
+        <div><h2>${$esc(p.name || a.friendly_name)}</h2><p class="${home ? "ok" : "warn"}">${$esc(where)} <span>· for ${ago(s.last_changed)}</span></p></div></div>
+      <button class="x" data-pm="close" aria-label="Close">${icon("mdi:close")}</button>`;
+    const info = row(home ? "mdi:home-outline" : "mdi:map-marker-outline", "Location", $esc(where), home ? "ok" : "warn")
+      + row("mdi:clock-outline", home ? "Home since" : s.state === "not_home" ? "Away since" : "Arrived", sinceTxt)
+      + (dist != null ? row("mdi:map-marker-distance", "From home", home ? "At home" : dist < 1 ? `${Math.round(dist * 1000)} m` : `${dist.toFixed(dist < 10 ? 1 : 0)} km`) : "")
+      + (a.gps_accuracy != null ? row("mdi:crosshairs-gps", "GPS accuracy", `± ${Math.round(a.gps_accuracy)} m`) : "")
+      + (src ? row("mdi:cellphone", "Tracked by", `${$esc(src.attributes.friendly_name || a.source)}<em>updated ${ago(src.last_updated)} ago</em>`) : "");
+    const hh = r.getElementById("pmh"), ii = r.getElementById("pmi");
+    if (hh && hh._h !== head) { hh._h = head; hh.innerHTML = head; hh.querySelector("[data-pm]")?.addEventListener("click", () => this._pmClose()); }
+    if (ii && ii._h !== info) { ii._h = info; ii.innerHTML = info; }
   }
   _climateHtml() {
     const h = this._hass, c = this._config;
@@ -1550,7 +1614,7 @@ class WpSide extends WpBase {
       const s = h.states[p.entity]; if (!s) return "";
       const home = s.state === "home"; const where = home ? "Home" : s.state === "not_home" ? "Away" : s.state;
       const pic = s.attributes.entity_picture;
-      return `<button class="card person ${home ? "home" : "away"}" data-go="${p.popup || ""}">
+      return `<button class="card person ${home ? "home" : "away"}" ${p.popup ? `data-go="${$esc(p.popup)}"` : `data-person="${c.people.indexOf(p)}"`}>
         <div class="av">${pic ? `<img src="${$esc(pic)}" alt="">` : icon("mdi:account")}<i></i></div>
         <div class="pi"><b>${$esc(p.name || s.attributes.friendly_name)}</b><span>${$esc(where)}</span><small>for ${ago(s.last_changed)}</small></div>
         ${icon("mdi:map-marker-outline", "pin")}</button>`;
@@ -1595,6 +1659,7 @@ class WpSide extends WpBase {
   _bind() {
     const r = this.shadowRoot, c = this._config;
     r.querySelectorAll("[data-go]").forEach((el) => el.addEventListener("click", () => this._go(el.dataset.go)));
+    r.querySelectorAll("[data-person]").forEach((el) => el.addEventListener("click", () => this._pmOpen(+el.dataset.person)));
     r.querySelectorAll("[data-act]").forEach((el) => el.addEventListener("click", (e) => { e.stopPropagation(); this._tvModal = el.dataset.act === "remote"; this._sig = null; this._render(); }));
     r.querySelectorAll("[data-tv]").forEach((el) => el.addEventListener("click", (e) => {
       e.stopPropagation(); const s = el.dataset.tv;
@@ -1660,6 +1725,23 @@ const WP_SIDE_CSS = `
   .pad { border:1px solid var(--wp-border); background: var(--wp-card-2); border-radius: 18px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap: 8px; min-height: 64px; font-size: 18px; font-weight: 700; } .pad ha-icon { --mdc-icon-size: 32px; } .pad:active { background: var(--wp-card-hi); transform: scale(.96); }
   .dpad .u { grid-column: 2; grid-row: 1; } .dpad .l { grid-column: 1; grid-row: 2; } .dpad .ok { grid-column: 2; grid-row: 2; border-radius: 50%; background: var(--wp-accent); color:#fff; border-color: transparent; font-size: 22px; } .dpad .r { grid-column: 3; grid-row: 2; } .dpad .d { grid-column: 2; grid-row: 3; }
   .rside { display:flex; flex-direction:column; gap: 10px; } .rrow2 { display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; } .pad.acc { background: var(--wp-accent); color:#fff; border-color: transparent; } .pad.off { color: var(--wp-bad); }
+  /* person location dialog */
+  .pm-in.scrim { animation: pmf .2s; } .pm-in.sheet { animation: pmp .22s cubic-bezier(.2,.9,.3,1.2); }
+  @keyframes pmf { from { opacity: 0; } } @keyframes pmp { from { opacity: 0; transform: translate(-50%,-50%) scale(.96); } }
+  .sheet.pmap { width: min(1120px, 92vw); height: min(760px, 88vh); padding: 0; display:flex; flex-direction:column; overflow:hidden; }
+  .pmap .sh { display:flex; justify-content:space-between; align-items:center; flex: none; }
+  .pmap .ttl { gap: 14px; } .pmap .ttl h2 { font-size: 24px; }
+  .pmap .sh p { font-size: 16px; font-weight: 600; } .pmap .sh p.ok { color: var(--wp-ok); } .pmap .sh p.warn { color: var(--wp-warn); } .pmap .sh p span { color: var(--wp-muted); font-weight: 500; }
+  .pmap .av { width: 56px; height: 56px; } .pmap .av.home i { background: var(--wp-ok); } .pmap .av.away i { background: var(--wp-warn); }
+  .pmb { flex: 1; min-height: 0; display:grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 18px; padding: 18px 22px 22px; }
+  .mapbox { position: relative; min-height: 0; border-radius: 20px; overflow: hidden; border: 1px solid var(--wp-border); background: var(--wp-card-2); }
+  .mapbox > * { display:block; height: 100%; --ha-card-border-radius: 0; --ha-card-border-width: 0; --ha-card-box-shadow: none; }
+  .pmerr { margin: 0; padding: 24px; color: var(--wp-muted); }
+  .pminfo { display:flex; flex-direction:column; gap: 10px; min-height: 0; overflow: auto; }
+  .pmr { display:flex; align-items:flex-start; gap: 12px; padding: 14px 16px; border-radius: 16px; background: var(--wp-card-2); border: 1px solid var(--wp-border); }
+  .pmr > ha-icon { --mdc-icon-size: 24px; color: var(--wp-accent); flex: none; margin-top: 2px; } .pmr.ok > ha-icon { color: var(--wp-ok); } .pmr.warn > ha-icon { color: var(--wp-warn); }
+  .pmr div { min-width: 0; display:flex; flex-direction:column; } .pmr small { color: var(--wp-muted); font-size: 13.5px; font-weight: 600; }
+  .pmr b { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; } .pmr em { display:block; font-style: normal; font-size: 13px; font-weight: 500; color: var(--wp-muted); margin-top: 2px; }
   .apps { display:flex; gap: 8px; flex-wrap: wrap; padding: 14px 26px 0; } .app { border:1px solid var(--wp-border); background: var(--wp-card-2); border-radius: 999px; padding: 12px 18px; font-size: 16px; font-weight: 700; cursor:pointer; } .app.on { border-color: var(--wp-accent); color: var(--wp-accent); }
 `;
 if (!customElements.get("wp-side")) customElements.define("wp-side", WpSide);
