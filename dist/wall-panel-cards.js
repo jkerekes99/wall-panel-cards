@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.10";
+const WP_VERSION = "0.9.11";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -252,7 +252,9 @@ class WpPage extends HTMLElement {
       else if (c.weather_popup) navigate(`${location.pathname}${c.weather_popup}`);
     });
     root.getElementById("wxlayer").addEventListener("click", (e) => {
-      if (e.target.closest("[data-close]")) { this._wxOpen = false; this._wxUnsub(); this._renderWx(); }
+      if (e.target.closest("[data-close]")) { this._wxOpen = false; this._wxView = null; this._radarCard = null; this._wxUnsub(); this._renderWx(); }
+      else if (e.target.closest("[data-radar]")) { this._wxView = "radar"; this._wxAnim = 0; this._renderWx(); }
+      else if (e.target.closest("[data-forecast]")) { this._wxView = null; this._radarCard = null; this._renderWx(); }
     });
     this._markActive();
     this._updateClock();
@@ -296,7 +298,15 @@ class WpPage extends HTMLElement {
     const el = this.shadowRoot?.getElementById("wxlayer"); if (!el) return;
     let html = "";
     const h = this._hass, w = h?.states[this._config.weather];
-    if (this._wxOpen && w) {
+    if (this._wxOpen && w && this._wxView === "radar") {
+      html = `<div class="ov" data-close="1"></div>
+        <section class="dlg wxd radar" role="dialog">
+          <header class="wxh rh"><button class="back" data-forecast="1">${icon("mdi:chevron-left")}Forecast</button>
+            <div class="rt"><b>Rain radar</b><small>Bureau of Meteorology · animated loop</small></div>
+            <button class="x" data-close="1" aria-label="Close">${icon("mdi:close")}</button></header>
+          <div class="radarbox" id="wxradar"></div>
+        </section>`;
+    } else if (this._wxOpen && w) {
       const a = w.attributes, F = this._wxF || {}, unit = a.temperature_unit || "°C";
       const [ic, label] = COND[w.state] || ["mdi:weather-partly-cloudy", w.state];
       const d = F.daily || [], hr = (F.hourly || []).filter((x) => new Date(x.datetime) > Date.now() - 3600e3).slice(0, 24);
@@ -317,6 +327,7 @@ class WpPage extends HTMLElement {
               ${a.wind_speed != null ? `<span>${icon("mdi:weather-windy")}${Math.round(a.wind_speed)} ${$esc(a.wind_speed_unit || "km/h")}${a.wind_bearing != null ? ` ${$esc(String(a.wind_bearing))}` : ""}</span>` : ""}
               ${today?.precipitation_probability ? `<span>${icon("mdi:umbrella-outline")}${Math.round(today.precipitation_probability)}% chance of rain</span>` : ""}
             </div>
+            ${this._config.radar ? `<button class="rbtn" data-radar="1">${icon("mdi:radar")}Rain radar</button>` : ""}
             <button class="x" data-close="1" aria-label="Close">${icon("mdi:close")}</button></header>
           ${hr.length ? `<div class="hrs">${hr.map((x) => `<div class="hc"><small>${hh(x.datetime)}</small>${icon((COND[x.condition] || ["mdi:weather-partly-cloudy"])[0])}<b>${r0(x.temperature)}°</b>${x.precipitation_probability ? `<em>${Math.round(x.precipitation_probability)}%</em>` : "<em></em>"}</div>`).join("")}</div>` : ""}
           <div class="days">${d.length ? d.slice(0, 7).map((x, i) => {
@@ -328,6 +339,23 @@ class WpPage extends HTMLElement {
         </section>`;
     }
     if (html !== this._wxHtml) { this._wxHtml = html; el.innerHTML = html; }
+    if (this._wxOpen && this._wxView === "radar") this._mountRadar();
+  }
+  // BoM radar loop (custom:bom-radar-card from the Marketplace) inside the weather dialog; map style follows the panel's light/dark mode
+  async _mountRadar() {
+    const box = this.shadowRoot?.getElementById("wxradar"); if (!box) return;
+    const style = this.hasAttribute("dark") ? "Dark" : "Light";
+    if (this._radarCard && this._radarStyle === style) { if (this._radarCard.parentNode !== box) box.replaceChildren(this._radarCard); return; }
+    if (this._radarBusy) return; this._radarBusy = true;
+    try {
+      if (!customElements.get("bom-radar-card")) await Promise.race([customElements.whenDefined("bom-radar-card"), new Promise((r) => setTimeout(r, 4000))]);
+      if (!customElements.get("bom-radar-card")) { box.innerHTML = `<div class="empty">${icon("mdi:radar")}BOM Radar Card isn't installed</div>`; return; }
+      const helpers = await window.loadCardHelpers();
+      const card = helpers.createCardElement({ type: "custom:bom-radar-card", zoom_level: 8, frame_count: 10, frame_delay: 300, restart_delay: 1500, show_marker: true, show_zoom: true, show_recenter: true, show_scale: true, ...(typeof this._config.radar === "object" ? this._config.radar : {}), map_style: style });
+      card.hass = this._hass;
+      this._radarCard = card; this._radarStyle = style;
+      const cur = this.shadowRoot?.getElementById("wxradar"); if (cur && this._wxView === "radar") cur.replaceChildren(card);
+    } catch (e) { console.warn("wp-page radar", e); } finally { this._radarBusy = false; }
   }
   /* ---------- status chips + "what's on" list dialog ---------- */
   _chipItems(ch) {
@@ -475,6 +503,13 @@ const WP_PAGE_CSS = `
   .rp { display:flex; align-items:center; gap: 2px; font-size: 14px; font-weight: 700; color: #38bdf8; } .rp ha-icon { --mdc-icon-size: 16px; }
   .tl { color: var(--wp-muted); text-align: right; font-weight: 600; } .th { font-weight: 800; }
   .rng { position: relative; height: 8px; border-radius: 999px; background: var(--wp-track); } .rng i { position:absolute; top:0; bottom:0; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #fbbf24 60%, #f97316); }
+  .rbtn { all: unset; cursor: pointer; flex: none; display:flex; align-items:center; gap: 8px; height: 52px; padding: 0 18px; border-radius: 16px; font-size: 17px; font-weight: 700; background: color-mix(in srgb, #38bdf8 16%, transparent); color: var(--wp-text); }
+  .rbtn ha-icon { --mdc-icon-size: 24px; color: #38bdf8; } .rbtn:active { transform: scale(.97); }
+  .wxd.radar { width: min(720px, calc(86vh - 96px), 94vw); max-height: 92vh; }
+  .wxh.rh { padding: 12px 14px 12px 12px; gap: 12px; }
+  .back { all: unset; cursor: pointer; flex: none; display:flex; align-items:center; gap: 2px; height: 50px; padding: 0 16px 0 8px; border-radius: 14px; background: var(--wp-card-2); font-size: 17px; font-weight: 700; } .back ha-icon { --mdc-icon-size: 26px; }
+  .rt { flex: 1; min-width: 0; display:flex; flex-direction:column; } .rt b { font-size: 21px; } .rt small { color: var(--wp-muted); font-size: 14px; }
+  .radarbox { padding: 0; min-height: 200px; } .radarbox > * { display:block; --ha-card-border-radius: 0; --ha-card-border-width: 0; --ha-card-box-shadow: none; }
   .wxd footer { padding: 8px 20px 14px; font-size: 12px; color: var(--wp-faint); }
   .empty { display:flex; flex-direction:column; align-items:center; gap: 10px; padding: 36px 10px; color: var(--wp-muted); font-size: 18px; } .empty ha-icon { --mdc-icon-size: 40px; opacity: .6; }
   .grid { flex:1; display:grid; gap: var(--wp-gap); min-height: 0; }
