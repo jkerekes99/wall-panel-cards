@@ -82,7 +82,7 @@ const WP_LUCIDE = {
 
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.12";
+const WP_VERSION = "0.9.13";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -540,28 +540,36 @@ const MODES = {
 };
 const MODE_ORDER = ["heat", "cool", "dry", "fan_only", "heat_cool", "auto"];
 const ACTION = { heating: "Heating", cooling: "Cooling", drying: "Drying", fan: "Fan", idle: "Idle", off: "Off", defrosting: "Defrosting", preheating: "Pre-heating" };
-// semantic level -> raw option candidates (ProtoART first, then Sensibo)
-const FAN_SEM = [["auto", "Auto", ["auto"]], ["quiet", "Quiet", ["silent", "quiet"]], ["low", "Low", ["low"]], ["medlow", "Med-low", ["medium_low"]],
-  ["medium", "Medium", ["med", "medium"]], ["medhigh", "Med-high", ["medium_high"]], ["high", "High", ["high"]], ["max", "Max", ["superhigh", "strong"]]];
-const VANE_SEM = [["auto", "Auto", ["auto", "stopped"]], ["swing", "Swing", ["swing", "rangefull"]], ["top", "Top", ["1", "fixedtop"]],
-  ["upper", "Upper", ["2", "fixedmiddletop"]], ["middle", "Middle", ["3", "fixedmiddle"]], ["lower", "Lower", ["4", "fixedmiddlebottom"]], ["bottom", "Bottom", ["5", "fixedbottom"]]];
-const HVANE_SEM = [["auto", "Auto", ["auto", "stopped"]], ["swing", "Swing", ["swing"]], ["farleft", "Far left", ["maxleft", "fixedleft"]],
-  ["left", "Left", ["left", "fixedcenterleft"]], ["centre", "Centre", ["middle", "fixedcenter"]], ["right", "Right", ["right", "fixedcenterright"]], ["farright", "Far right", ["maxright", "fixedright"]]];
+// semantic level -> raw option candidates, compared case/space-insensitively (see semNorm).
+// ProtoART firmware <3.6 (silent/med/superhigh, 1-5, maxleft), ProtoART 3.6+ (Silent, Super High,
+// Highest…Lowest, Maximum Left), then Sensibo (quiet/strong, fixedtop…).
+const FAN_SEM = [["auto", "Auto", ["auto"]], ["quiet", "Quiet", ["silent", "quiet"]], ["low", "Low", ["low"]], ["medlow", "Med-low", ["mediumlow"]],
+  ["medium", "Medium", ["med", "medium"]], ["medhigh", "Med-high", ["mediumhigh"]], ["high", "High", ["high"]], ["max", "Max", ["superhigh", "strong"]]];
+const VANE_SEM = [["auto", "Auto", ["auto", "stopped"]], ["swing", "Swing", ["swing", "rangefull"]], ["top", "Top", ["1", "highest", "fixedtop"]],
+  ["upper", "Upper", ["2", "high", "fixedmiddletop"]], ["middle", "Middle", ["3", "middle", "fixedmiddle"]], ["lower", "Lower", ["4", "low", "fixedmiddlebottom"]], ["bottom", "Bottom", ["5", "lowest", "fixedbottom"]]];
+const HVANE_SEM = [["auto", "Auto", ["auto", "stopped"]], ["swing", "Swing", ["swing"]], ["farleft", "Far left", ["maxleft", "maximumleft", "fixedleft"]],
+  ["left", "Left", ["left", "fixedcenterleft"]], ["centre", "Centre", ["middle", "center", "centre", "fixedcenter"]], ["right", "Right", ["right", "fixedcenterright"]], ["farright", "Far right", ["maxright", "maximumright", "fixedright"]]];
 const VANE_ANGLE = { top: 8, upper: 26, middle: 44, lower: 62, bottom: 80 };
 const HVANE_ANGLE = { farleft: -50, left: -25, centre: 0, right: 25, farright: 50 };
 const PRESET_LABEL = { normal: "Normal", quiet: "Quiet", powerful: "Powerful", none: "None", eco: "Eco", boost: "Boost", comfort: "Comfort" };
 
+const semNorm = (v) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// the device's own option string for a candidate list (first candidate that the device offers)
+const semPick = (raw, cands) => {
+  if (!raw || !raw.length) return undefined;
+  for (const c of cands) { const r = raw.find((o) => semNorm(o) === c); if (r != null) return r; }
+  return undefined;
+};
 function semOptions(raw, SEM) {
-  if (!raw) return [];
   const out = [];
   for (const [key, label, cands] of SEM) {
-    const r = cands.find((c) => raw.includes(c));
-    if (r) out.push({ key, label, raw: r });
+    const r = semPick(raw, cands);
+    if (r != null) out.push({ key, label, raw: r });
   }
   return out;
 }
-const semFor = (raw, SEM, key) => { const e = SEM.find((s) => s[0] === key); return e && raw ? e[2].find((c) => raw.includes(c)) : undefined; };
-const semKeyOf = (value, SEM) => (SEM.find((s) => s[2].includes(value)) || [])[0];
+const semFor = (raw, SEM, key) => { const e = SEM.find((s) => s[0] === key); return e ? semPick(raw, e[2]) : undefined; };
+const semKeyOf = (value, SEM) => { const n = semNorm(value); return n ? (SEM.find((s) => s[2].includes(n)) || [])[0] : undefined; };
 
 function vaneSvg(key, horizontal) {
   if (key === "swing") return `<svg viewBox="0 0 32 32" class="vsvg"><path d="M6 10 Q16 4 26 10 M6 22 Q16 28 26 22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><path d="M23 6 l3 4 -4 1 M9 26 l-3 -4 4 -1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
