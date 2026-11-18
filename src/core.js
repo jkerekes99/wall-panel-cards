@@ -1,6 +1,6 @@
 /* Wall Panel cards for Home Assistant — wp-page (shell + nav) and wp-climate.
  * Joshua's 13.1" Galaxy Tab S10 FE+ wall panel. Local-only, no external deps. */
-const WP_VERSION = "0.9.11";
+const WP_VERSION = "0.9.12";
 
 /* ---------- helpers ---------- */
 const $esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -220,7 +220,7 @@ class WpPage extends HTMLElement {
       html = `<div class="ov" data-close="1"></div>
         <section class="dlg wxd radar" role="dialog">
           <header class="wxh rh"><button class="back" data-forecast="1">${icon("mdi:chevron-left")}Forecast</button>
-            <div class="rt"><b>Rain radar</b><small>Bureau of Meteorology · animated loop</small></div>
+            <div class="rt"><b>Rain radar</b><small>Bureau of Meteorology · rain radar, 5-minute frames</small></div>
             <button class="x" data-close="1" aria-label="Close">${icon("mdi:close")}</button></header>
           <div class="radarbox" id="wxradar"></div>
         </section>`;
@@ -269,7 +269,13 @@ class WpPage extends HTMLElement {
       if (!customElements.get("bom-radar-card")) await Promise.race([customElements.whenDefined("bom-radar-card"), new Promise((r) => setTimeout(r, 4000))]);
       if (!customElements.get("bom-radar-card")) { box.innerHTML = `<div class="empty">${icon("mdi:radar")}BOM Radar Card isn't installed</div>`; return; }
       const helpers = await window.loadCardHelpers();
-      const card = helpers.createCardElement({ type: "custom:bom-radar-card", zoom_level: 8, frame_count: 10, frame_delay: 300, restart_delay: 1500, show_marker: true, show_zoom: true, show_recenter: true, show_scale: true, ...(typeof this._config.radar === "object" ? this._config.radar : {}), map_style: style });
+      // AshtonAU/bom-radar-card (BoM WMTS tiles from api.bom.gov.au); the map fills the dialog body
+      const dark = style === "Dark";
+      const h = Math.max(320, Math.min(720, Math.round(window.innerHeight * 0.88 - 92)));
+      const card = helpers.createCardElement({ type: "custom:bom-radar-card", layer: "reflectivity", zoom_level: 8, frame_count: 9, frame_delay: 400, restart_delay: 1800,
+        show_marker: true, show_zoom: true, show_recenter: true, show_place_names: true, bom_reference_layers: ["state_borders"], radar_opacity: 0.8,
+        ...(typeof this._config.radar === "object" ? this._config.radar : {}),
+        map_height: h, basemap_provider: "bom", basemap_style: dark ? "dark" : "default", ui_theme: dark ? "dark" : "light" });
       card.hass = this._hass;
       this._radarCard = card; this._radarStyle = style;
       const cur = this.shadowRoot?.getElementById("wxradar"); if (cur && this._wxView === "radar") cur.replaceChildren(card);
@@ -423,7 +429,7 @@ const WP_PAGE_CSS = `
   .rng { position: relative; height: 8px; border-radius: 999px; background: var(--wp-track); } .rng i { position:absolute; top:0; bottom:0; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #fbbf24 60%, #f97316); }
   .rbtn { all: unset; cursor: pointer; flex: none; display:flex; align-items:center; gap: 8px; height: 52px; padding: 0 18px; border-radius: 16px; font-size: 17px; font-weight: 700; background: color-mix(in srgb, #38bdf8 16%, transparent); color: var(--wp-text); }
   .rbtn ha-icon { --mdc-icon-size: 24px; color: #38bdf8; } .rbtn:active { transform: scale(.97); }
-  .wxd.radar { width: min(720px, calc(86vh - 96px), 94vw); max-height: 92vh; }
+  .wxd.radar { width: min(1100px, 94vw); max-height: 94vh; }
   .wxh.rh { padding: 12px 14px 12px 12px; gap: 12px; }
   .back { all: unset; cursor: pointer; flex: none; display:flex; align-items:center; gap: 2px; height: 50px; padding: 0 16px 0 8px; border-radius: 14px; background: var(--wp-card-2); font-size: 17px; font-weight: 700; } .back ha-icon { --mdc-icon-size: 26px; }
   .rt { flex: 1; min-width: 0; display:flex; flex-direction:column; } .rt b { font-size: 21px; } .rt small { color: var(--wp-muted); font-size: 14px; }
