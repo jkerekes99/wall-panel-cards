@@ -134,7 +134,10 @@ class WpPowerFlow extends WpBase {
     }
     const set = (id, html) => { if (this._parts[id] !== html) { this._parts[id] = html; r.getElementById(id).innerHTML = html; } };
     const solar = Math.max(0, stateNum(h, c.solar) ?? 0), imp = Math.max(0, stateNum(h, c.grid_import) ?? 0), exp = Math.max(0, stateNum(h, c.grid_export) ?? 0);
-    const home = stateNum(h, c.home) ?? Math.max(0, solar + imp - exp), ev = Math.max(0, stateNum(h, c.ev) ?? 0);
+    const ev = Math.max(0, stateNum(h, c.ev) ?? 0);
+    // home_includes_ev: the home sensor (or solar + import - export) also counts the EV charger, so take the car off "Home use"
+    const homeRaw = stateNum(h, c.home) ?? Math.max(0, solar + imp - exp);
+    const home = c.home_includes_ev ? Math.max(0, homeRaw - ev) : homeRaw;
     const gridW = imp > 20 ? imp : exp > 20 ? -exp : 0;
     // car_plugged: show the car photo and the EV flow only while the car is plugged in (or while it is drawing power)
     const carHere = !c.car_plugged || h.states[c.car_plugged]?.state === "on" || ev > 50;
